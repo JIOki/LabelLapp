@@ -2,7 +2,6 @@ import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:labellab/models/bounding_box.dart';
-import 'transform_logic.dart';
 
 // A list of predefined colors for the bounding boxes
 const List<Color> _kPredefinedColors = [
@@ -33,6 +32,7 @@ class DrawingCanvas extends StatefulWidget {
   final void Function(List<BoundingBox>) onUpdate;
   final String? selectedClass;
   final List<String> projectClasses; // Pass all project classes
+  final TransformationController transformationController;
 
   const DrawingCanvas({
     super.key,
@@ -41,6 +41,7 @@ class DrawingCanvas extends StatefulWidget {
     required this.onUpdate,
     this.selectedClass,
     required this.projectClasses,
+    required this.transformationController,
   });
 
   @override
@@ -54,13 +55,20 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   _ResizeHandle? _activeHandle;
   Offset? _dragStart;
   Rect? _initialBoxRect;
-  Matrix4 _transform = Matrix4.identity();
   final Map<String, Color> _classColors = {};
 
   @override
   void initState() {
     super.initState();
     _assignClassColors();
+    // Rebuild the painter when the transformation changes
+    widget.transformationController.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    widget.transformationController.removeListener(() => setState(() {}));
+    super.dispose();
   }
 
   void _assignClassColors() {
@@ -70,15 +78,14 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     }
   }
 
-  Matrix4 _calculateTransform(Size canvasSize) {
-    final imageSize =
-        Size(widget.image.width.toDouble(), widget.image.height.toDouble());
-    return calculateImageTransform(imageSize, canvasSize);
-  }
-
   Offset _transformToImageCoordinates(Offset localPosition) {
-    final invertedTransform = Matrix4.inverted(_transform);
-    return MatrixUtils.transformPoint(invertedTransform, localPosition);
+    final transform = widget.transformationController.value;
+    // The InteractiveViewer handles the viewport transform, so we need to offset by its position.
+    final paintOffset = Offset(
+        (context.size!.width - widget.image.width * transform.getMaxScaleOnAxis()) / 2,
+        (context.size!.height - widget.image.height * transform.getMaxScaleOnAxis()) / 2);
+    final invertedTransform = Matrix4.inverted(transform);
+    return MatrixUtils.transformPoint(invertedTransform, localPosition - paintOffset);
   }
 
   Rect _clampRectToImage(Rect rect) {
@@ -122,35 +129,28 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
         center: boxRect.topRight, width: iconSize, height: iconSize);
   }
 
-  void _onPanStart(DragStartDetails details) {
+  void _onLongPressStart(LongPressStartDetails details) {
     final imageCoords = _transformToImageCoordinates(details.localPosition);
     _dragStart = imageCoords;
-
-    if (_selectedBoxIndex != null) {
-      final selectedBox = widget.boxes[_selectedBoxIndex!];
-      final scale = _transform.getMaxScaleOnAxis();
-      final handleSize = 20 / scale;
-      final iconSize = 24 / scale;
-
-      if (_getDeleteIconRect(selectedBox.toRect(), iconSize).contains(imageCoords)) {
-        setState(() {
-          _interaction = _InteractionType.deleting;
-        });
-        return;
-      }
-
-      _activeHandle = _hitTestHandles(imageCoords, selectedBox.toRect(), handleSize);
-      if (_activeHandle != null) {
-        _interaction = _InteractionType.resizing;
-        _initialBoxRect = selectedBox.toRect();
-        return;
-      }
-    }
-
+    
     int? hitIndex;
     for (int i = widget.boxes.length - 1; i >= 0; i--) {
-      if (widget.boxes[i].toRect().contains(imageCoords)) {
+      final box = widget.boxes[i];
+      final scale = widget.transformationController.value.getMaxScaleOnAxis();
+      final handleSize = 20 / scale;
+
+      _activeHandle = _hitTestHandles(imageCoords, box.toRect(), handleSize);
+      if (_activeHandle != null) {
         hitIndex = i;
+        _interaction = _InteractionType.resizing;
+        _initialBoxRect = box.toRect();
+        break;
+      }
+
+      if (box.toRect().contains(imageCoords)) {
+        hitIndex = i;
+         _interaction = _InteractionType.moving;
+        _initialBoxRect = box.toRect();
         break;
       }
     }
@@ -158,11 +158,9 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     if (hitIndex != null) {
       setState(() {
         _selectedBoxIndex = hitIndex;
-        _interaction = _InteractionType.moving;
-        _initialBoxRect = widget.boxes[hitIndex!].toRect();
       });
     } else {
-      setState(() {
+       setState(() {
         _selectedBoxIndex = null;
       });
       if (widget.selectedClass != null) {
@@ -182,7 +180,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     }
   }
 
-  void _onPanUpdate(DragUpdateDetails details) {
+  void _onLongPressMoveUpdate(LongPressMoveUpdateDetails details) {
     final imageCoords = _transformToImageCoordinates(details.localPosition);
     final updatedBoxes = List<BoundingBox>.from(widget.boxes);
 
@@ -199,6 +197,8 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       updatedBoxes[_selectedBoxIndex!] =
           BoundingBox.fromRect(clampedRect, widget.boxes[_selectedBoxIndex!].label);
       widget.onUpdate(updatedBoxes);
+       _dragStart = imageCoords;
+      _initialBoxRect = clampedRect;
     } else if (_interaction == _InteractionType.resizing &&
         _selectedBoxIndex != null &&
         _activeHandle != null) {
@@ -226,7 +226,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     }
   }
 
-  void _onPanEnd(DragEndDetails details) {
+  void _onLongPressEnd(LongPressEndDetails details) {
     if (_interaction == _InteractionType.deleting && _selectedBoxIndex != null) {
       final updatedBoxes = List<BoundingBox>.from(widget.boxes);
       updatedBoxes.removeAt(_selectedBoxIndex!);
@@ -252,30 +252,40 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     });
   }
 
+
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onPanStart: _onPanStart,
-      onPanUpdate: _onPanUpdate,
-      onPanEnd: _onPanEnd,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final canvasSize = Size(constraints.maxWidth, constraints.maxHeight);
-          _transform = _calculateTransform(canvasSize);
-
-          return CustomPaint(
-            painter: _BoundingBoxPainter(
-              image: widget.image,
-              boxes: widget.boxes,
-              currentBox: _currentBox,
-              selectedBoxIndex: _selectedBoxIndex,
-              transform: _transform,
-              classColors: _classColors,
-              drawingClass: widget.selectedClass,
-            ),
-            child: Container(),
-          );
-        },
+      onLongPressStart: _onLongPressStart,
+      onLongPressMoveUpdate: _onLongPressMoveUpdate,
+      onLongPressEnd: _onLongPressEnd,
+      onTapUp: (details) {
+        final imageCoords = _transformToImageCoordinates(details.localPosition);
+        if (_selectedBoxIndex != null) {
+          final selectedBox = widget.boxes[_selectedBoxIndex!];
+          final scale = widget.transformationController.value.getMaxScaleOnAxis();
+          final iconSize = 24 / scale;
+          if (_getDeleteIconRect(selectedBox.toRect(), iconSize).contains(imageCoords)) {
+             final updatedBoxes = List<BoundingBox>.from(widget.boxes);
+            updatedBoxes.removeAt(_selectedBoxIndex!);
+            widget.onUpdate(updatedBoxes);
+            setState(() {
+              _selectedBoxIndex = null;
+            });
+          }
+        }
+      },
+      child: CustomPaint(
+        painter: _BoundingBoxPainter(
+          image: widget.image,
+          boxes: widget.boxes,
+          currentBox: _currentBox,
+          selectedBoxIndex: _selectedBoxIndex,
+          transformationController: widget.transformationController,
+          classColors: _classColors,
+          drawingClass: widget.selectedClass,
+        ),
+        size: Size(widget.image.width.toDouble(), widget.image.height.toDouble()),
       ),
     );
   }
@@ -286,7 +296,7 @@ class _BoundingBoxPainter extends CustomPainter {
   final List<BoundingBox> boxes;
   final BoundingBox? currentBox;
   final int? selectedBoxIndex;
-  final Matrix4 transform;
+  final TransformationController transformationController;
   final Map<String, Color> classColors;
   final String? drawingClass;
 
@@ -295,16 +305,16 @@ class _BoundingBoxPainter extends CustomPainter {
     required this.boxes,
     this.currentBox,
     this.selectedBoxIndex,
-    required this.transform,
+    required this.transformationController,
     required this.classColors,
     this.drawingClass,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.save();
-    canvas.transform(transform.storage);
+    final scale = transformationController.value.getMaxScaleOnAxis();
 
+    // Paint the image
     paintImage(
       canvas: canvas,
       rect: Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
@@ -320,18 +330,16 @@ class _BoundingBoxPainter extends CustomPainter {
       final paint = Paint()
         ..color = isSelected ? Colors.yellowAccent : color
         ..style = PaintingStyle.stroke
-        ..strokeWidth = isSelected
-            ? 4.0 / transform.getMaxScaleOnAxis()
-            : 2.0 / transform.getMaxScaleOnAxis();
+        ..strokeWidth = isSelected ? 4.0 / scale : 2.0 / scale;
 
       final rect = box.toRect();
       canvas.drawRect(rect, paint);
       _drawLabel(canvas, rect, box.label,
-          isSelected ? Colors.yellowAccent.withAlpha(204) : color);
+          isSelected ? Colors.yellowAccent.withAlpha(204) : color, scale);
 
       if (isSelected) {
-        _drawHandles(canvas, rect);
-        _drawDeleteIcon(canvas, rect);
+        _drawHandles(canvas, rect, scale);
+        _drawDeleteIcon(canvas, rect, scale);
       }
     }
 
@@ -340,12 +348,10 @@ class _BoundingBoxPainter extends CustomPainter {
       final paint = Paint()
         ..color = color
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.0 / transform.getMaxScaleOnAxis();
+        ..strokeWidth = 2.0 / scale;
       final clampedRect = _clampRectToImage(currentBox!.toRect().normalize());
       canvas.drawRect(clampedRect, paint);
     }
-
-    canvas.restore();
   }
 
   Rect _clampRectToImage(Rect rect) {
@@ -359,13 +365,13 @@ class _BoundingBoxPainter extends CustomPainter {
     );
   }
 
-  void _drawLabel(Canvas canvas, Rect rect, String text, Color color) {
+  void _drawLabel(Canvas canvas, Rect rect, String text, Color color, double scale) {
     final textPainter = TextPainter(
       text: TextSpan(
         text: text,
         style: TextStyle(
           color: Colors.white,
-          fontSize: 14 / transform.getMaxScaleOnAxis(),
+          fontSize: 14 / scale,
           backgroundColor: color,
         ),
       ),
@@ -375,8 +381,7 @@ class _BoundingBoxPainter extends CustomPainter {
     textPainter.paint(canvas, rect.topLeft - Offset(0, textPainter.height));
   }
 
-  void _drawHandles(Canvas canvas, Rect rect) {
-    final scale = transform.getMaxScaleOnAxis();
+  void _drawHandles(Canvas canvas, Rect rect, double scale) {
     final handleSize = 10.0 / scale;
     final handlePaint = Paint()..color = Colors.yellowAccent;
 
@@ -398,8 +403,7 @@ class _BoundingBoxPainter extends CustomPainter {
         handlePaint);
   }
 
-  void _drawDeleteIcon(Canvas canvas, Rect rect) {
-    final scale = transform.getMaxScaleOnAxis();
+  void _drawDeleteIcon(Canvas canvas, Rect rect, double scale) {
     final iconSize = 24 / scale;
     final deleteRect =
         Rect.fromCenter(center: rect.topRight, width: iconSize, height: iconSize);
@@ -425,7 +429,8 @@ class _BoundingBoxPainter extends CustomPainter {
       oldDelegate.boxes != boxes ||
       oldDelegate.currentBox != currentBox ||
       oldDelegate.selectedBoxIndex != selectedBoxIndex ||
-      oldDelegate.transform != transform ||
+      oldDelegate.transformationController.value !=
+          transformationController.value ||
       oldDelegate.classColors != classColors;
 }
 

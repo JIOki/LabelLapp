@@ -22,6 +22,7 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
   late List<BoundingBox> _boxes;
   ui.Image? _image;
   String? _selectedClass;
+  final TransformationController _transformationController = TransformationController();
 
   // Stacks for Undo/Redo functionality
   final List<List<BoundingBox>> _history = [];
@@ -33,6 +34,12 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
     // Initialize boxes with a deep copy
     _boxes = widget.image.annotation.boxes.map((box) => box.copyWith()).toList();
     _loadImage();
+  }
+
+  @override
+  void dispose() {
+    _transformationController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadImage() async {
@@ -117,17 +124,24 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
           Expanded(
             flex: 3,
             child: _image != null
-                ? DrawingCanvas(
-                    image: _image!,
-                    boxes: _boxes,
-                    selectedClass: _selectedClass,
-                    projectClasses: widget.project.classes,
-                    onUpdate: (newBoxes) {
-                      _addStateToHistory();
-                      setState(() {
-                        _boxes = newBoxes;
-                      });
-                    },
+                ? InteractiveViewer(
+                    transformationController: _transformationController,
+                    boundaryMargin: const EdgeInsets.all(double.infinity),
+                    minScale: 0.5,
+                    maxScale: 4.0,
+                    child: DrawingCanvas(
+                      image: _image!,
+                      boxes: _boxes,
+                      selectedClass: _selectedClass,
+                      projectClasses: widget.project.classes,
+                      transformationController: _transformationController,
+                      onUpdate: (newBoxes) {
+                        _addStateToHistory();
+                        setState(() {
+                          _boxes = newBoxes;
+                        });
+                      },
+                    ),
                   )
                 : const Center(child: CircularProgressIndicator()),
           ),

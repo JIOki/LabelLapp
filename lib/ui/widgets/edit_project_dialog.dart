@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 class EditProjectDialog extends StatefulWidget {
@@ -11,21 +10,27 @@ class EditProjectDialog extends StatefulWidget {
 }
 
 class _EditProjectDialogState extends State<EditProjectDialog> {
-  late TextEditingController _classController;
+  late TextEditingController _controller;
   late List<String> _classes;
 
   @override
   void initState() {
     super.initState();
-    _classController = TextEditingController();
+    _controller = TextEditingController();
     _classes = List.from(widget.initialClasses);
   }
 
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   void _addClass() {
-    if (_classController.text.isNotEmpty) {
+    if (_controller.text.isNotEmpty) {
       setState(() {
-        _classes.add(_classController.text);
-        _classController.clear();
+        _classes.add(_controller.text);
+        _controller.clear();
       });
     }
   }
@@ -39,42 +44,47 @@ class _EditProjectDialogState extends State<EditProjectDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Edit Classes'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: _classController,
-            decoration: InputDecoration(
-              labelText: 'New Class',
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.add),
-                onPressed: _addClass,
+      title: const Text('Edit Project Classes'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _controller,
+              decoration: InputDecoration(
+                labelText: 'New Class Name',
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.add),
+                  onPressed: _addClass,
+                ),
               ),
+              onSubmitted: (_) => _addClass(),
             ),
-            onSubmitted: (_) => _addClass(),
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8.0,
-            children: _classes
-                .map(
-                  (className) => Chip(
+            const SizedBox(height: 16),
+            Expanded(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _classes.length,
+                itemBuilder: (context, index) {
+                  final className = _classes[index];
+                  return Chip(
                     label: Text(className),
                     onDeleted: () => _removeClass(className),
-                  ),
-                )
-                .toList(),
-          ),
-        ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, _classes),
+        ElevatedButton(
+          onPressed: () => Navigator.of(context).pop(_classes),
           child: const Text('Save'),
         ),
       ],

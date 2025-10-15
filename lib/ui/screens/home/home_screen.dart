@@ -1,10 +1,12 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:labellab/models/project.dart';
-import 'package:labellab/services/project_service.dart';
-import 'package:labellab/ui/screens/home/new_project_dialog.dart';
-import 'package:labellab/ui/screens/project/project_screen.dart';
+import '../../../data/models/project_model.dart';
+import '../../../services/project_service.dart';
+import '../../../theme/app_theme.dart';
+import './new_project_dialog.dart';
+import '../project/project_screen.dart';
+import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -146,9 +148,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
     return Scaffold(
       appBar: AppBar(
         title: const Text('BBox Annotator'),
+        actions: [
+          IconButton(
+            icon: Icon(themeProvider.themeMode == ThemeMode.dark ? Icons.light_mode : Icons.dark_mode),
+            onPressed: () => themeProvider.toggleTheme(),
+            tooltip: 'Toggle Theme',
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -175,10 +185,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   margin: const EdgeInsets.symmetric(
                     horizontal: 16.0,
                     vertical: 8.0,
-                  ),
-                  elevation: 4.0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8.0),
                   ),
                   child: ListTile(
                     title: Text(project.name),

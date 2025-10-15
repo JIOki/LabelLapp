@@ -1,16 +1,19 @@
 import 'dart:io';
+import 'package:path/path.dart' as p;
 
 import 'package:archive/archive_io.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart' as img;
-import 'package:labellab/ui/widgets/edit_project_dialog.dart';
+import '../../../data/models/annotation_model.dart';
+import '../../../data/models/bounding_box_model.dart';
+import '../../../data/models/image_model.dart';
+import '../../../data/models/project_model.dart';
+import '../annotation/annotation_screen.dart';
+import '../../widgets/edit_project_dialog.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../../models/image.dart';
-import '../../../models/project.dart';
-import '../annotation/annotation_screen.dart';
 
 class ProjectScreen extends StatefulWidget {
   final Project project;
@@ -40,14 +43,19 @@ class _ProjectScreenState extends State<ProjectScreen> {
       _isLoading = true;
     });
     try {
-      final imagesDir = Directory('${_project.projectPath}/images');
+      final imagesDir = Directory(p.join(_project.projectPath, 'images'));
       if (await imagesDir.exists()) {
         final imageFiles = await imagesDir.list().toList();
         final images = <ProjectImage>[];
         for (var file in imageFiles) {
           if (file is File) {
             final bytes = await file.readAsBytes();
-            images.add(ProjectImage(name: file.path.split('/').last, bytes: bytes));
+            final imageName = p.basename(file.path);
+
+            // Load annotations if they exist
+            final annotation = await _loadAnnotationForImage(imageName, bytes);
+
+            images.add(ProjectImage(name: imageName, bytes: bytes, annotation: annotation));
           }
         }
         if (mounted) {
@@ -63,6 +71,42 @@ class _ProjectScreenState extends State<ProjectScreen> {
         });
       }
     }
+  }
+
+  Future<Annotation> _loadAnnotationForImage(String imageName, Uint8List bytes) async {
+    final imageNameNoExt = p.basenameWithoutExtension(imageName);
+    final labelPath = p.join(_project.projectPath, 'labels', '$imageNameNoExt.txt');
+    final labelFile = File(labelPath);
+
+    if (await labelFile.exists()) {
+      final lines = await labelFile.readAsLines();
+      final image = await decodeImageFromList(bytes);
+
+      final boxes = lines.map((line) {
+        final parts = line.split(' ');
+        if (parts.length != 5) return null;
+
+        final classIndex = int.parse(parts[0]);
+        final centerX = double.parse(parts[1]);
+        final centerY = double.parse(parts[2]);
+        final width = double.parse(parts[3]);
+        final height = double.parse(parts[4]);
+
+        final imageWidth = image.width.toDouble();
+        final imageHeight = image.height.toDouble();
+
+        return BoundingBox(
+          label: _project.classes[classIndex],
+          left: (centerX - width / 2) * imageWidth,
+          top: (centerY - height / 2) * imageHeight,
+          right: (centerX + width / 2) * imageWidth,
+          bottom: (centerY + height / 2) * imageHeight,
+        );
+      }).where((b) => b != null).cast<BoundingBox>().toList();
+
+      return Annotation(boxes: boxes);
+    }
+    return Annotation();
   }
 
   Future<void> _showProgressDialog() {
@@ -239,36 +283,6 @@ class _ProjectScreenState extends State<ProjectScreen> {
     await File(imagePath).writeAsBytes(image.bytes);
   }
 
-  Future<String> _generateYoloAnnotationString(ProjectImage image) async {
-    final decodedImage = await decodeImageFromList(image.bytes);
-    final imageWidth = decodedImage.width;
-    final imageHeight = decodedImage.height;
-
-    return image.annotation.boxes.map((box) {
-      final classIndex = _project.classes.indexOf(box.label);
-      if (classIndex != -1) {
-        final centerX = (box.left + box.right) / 2;
-        final centerY = (box.top + box.bottom) / 2;
-        final width = box.right - box.left;
-        final height = box.bottom - box.top;
-
-        final normalizedCenterX = centerX / imageWidth;
-        final normalizedCenterY = centerY / imageHeight;
-        final normalizedWidth = width / imageWidth;
-        final normalizedHeight = height / imageHeight;
-
-        return '$classIndex $normalizedCenterX $normalizedCenterY $normalizedWidth $normalizedHeight';
-      }
-      return '';
-    }).where((line) => line.isNotEmpty).join('\n');
-  }
-
-  Future<void> _saveAnnotations(ProjectImage image) async {
-    final labelPath = '${_project.projectPath}/labels/${image.name.split('.').first}.txt';
-    final yoloAnnotations = await _generateYoloAnnotationString(image);
-    await File(labelPath).writeAsString(yoloAnnotations);
-  }
-
   Future<void> _openEditClassesDialog() async {
     final updatedClasses = await showDialog<List<String>>(
       context: context,
@@ -279,13 +293,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
 
     if (updatedClasses != null) {
       setState(() {
-        _project = Project(
-          id: _project.id,
-          name: _project.name,
-          projectPath: _project.projectPath,
-          images: _project.images,
-          classes: updatedClasses,
-        );
+        _project = _project.copyWith(classes: updatedClasses);
       });
     }
   }
@@ -321,18 +329,17 @@ class _ProjectScreenState extends State<ProjectScreen> {
       encoder.create(archivePath);
 
       for (final image in _images) {
-        final yoloAnnotations = await _generateYoloAnnotationString(image);
-        final labelBytes = Uint8List.fromList(yoloAnnotations.codeUnits);
-
+        final labelPath = p.join(_project.projectPath, 'labels', '${p.basenameWithoutExtension(image.name)}.txt');
+        final labelFile = File(labelPath);
+        if(await labelFile.exists()){
+            final labelBytes = await labelFile.readAsBytes();
+             encoder.addArchiveFile(
+                ArchiveFile('labels/${p.basename(labelFile.path)}', labelBytes.length, labelBytes),
+            );
+        }
         encoder.addArchiveFile(
           ArchiveFile('images/${image.name}', image.bytes.length, image.bytes),
         );
-
-        if (yoloAnnotations.isNotEmpty) {
-          encoder.addArchiveFile(
-            ArchiveFile('labels/${image.name.split('.').first}.txt', labelBytes.length, labelBytes),
-          );
-        }
       }
 
       final classesContent = _project.classes.join('\n');
@@ -411,7 +418,6 @@ class _ProjectScreenState extends State<ProjectScreen> {
                       setState(() {
                         _images[index] = updatedImage;
                       });
-                      await _saveAnnotations(updatedImage);
                     }
                   },
                   child: Stack(

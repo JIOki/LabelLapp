@@ -1,18 +1,18 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:labellab/models/annotation.dart';
-import 'package:labellab/models/bounding_box.dart';
-import 'package:labellab/models/image.dart';
-import 'package:labellab/models/project.dart';
-import 'package:labellab/ui/screens/annotation/annotation_screen.dart';
+import 'package:label_lab/data/models/annotation_model.dart';
+import 'package:label_lab/data/models/bounding_box_model.dart';
+import 'package:label_lab/data/models/image_model.dart';
+import 'package:label_lab/data/models/project_model.dart';
+import 'package:label_lab/ui/screens/annotation/annotation_screen.dart';
 
 // A 1x1 transparent PNG
 final kTestImageBytes = base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=');
 
 void main() {
   testWidgets('AnnotationScreen renders correctly', (WidgetTester tester) async {
-    final project = Project(name: 'Test Project', projectPath: '/tmp', classes: ['class1', 'class2']);
+    final project = Project(id: '1', name: 'Test Project', projectPath: '/tmp', classes: ['class1', 'class2']);
     final image = ProjectImage(name: 'Test Image', bytes: kTestImageBytes);
 
     await tester.pumpWidget(MaterialApp(
@@ -24,7 +24,7 @@ void main() {
   });
 
   testWidgets('Tapping save button pops the navigator', (WidgetTester tester) async {
-    final project = Project(name: 'Test Project', projectPath: '/tmp', classes: ['class1', 'class2']);
+    final project = Project(id: '1', name: 'Test Project', projectPath: '/tmp', classes: ['class1', 'class2']);
     final image = ProjectImage(name: 'Test Image', bytes: kTestImageBytes);
 
     await tester.pumpWidget(MaterialApp(
@@ -56,13 +56,13 @@ void main() {
     expect(find.text('Go to Annotation'), findsOneWidget);
   });
 
-  testWidgets('Editing a label updates the state', (WidgetTester tester) async {
-    final project = Project(name: 'Test Project', projectPath: '/tmp', classes: ['class1', 'class2']);
+  testWidgets('Class selector chips are displayed and can be selected', (WidgetTester tester) async {
+    final project = Project(id: '1', name: 'Test Project', projectPath: '/tmp', classes: ['class1', 'class2']);
     final image = ProjectImage(
       name: 'Test Image',
       bytes: kTestImageBytes,
       annotation: Annotation(
-        boxes: [
+        boxes: const [
           BoundingBox(left: 0, top: 0, right: 10, bottom: 10, label: 'class1'),
         ],
       ),
@@ -71,53 +71,30 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       home: AnnotationScreen(image: image, project: project),
     ));
+    await tester.pumpAndSettle(); 
 
-    final editIconFinder = find.descendant(of: find.widgetWithText(Card, 'class1'), matching: find.byIcon(Icons.edit));
-    await tester.ensureVisible(editIconFinder);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    await tester.tap(editIconFinder);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
+    // Verify both class chips are displayed
+    expect(find.widgetWithText(ChoiceChip, 'class1'), findsOneWidget);
+    expect(find.widgetWithText(ChoiceChip, 'class2'), findsOneWidget);
 
-    // Tap on the second class in the dialog
-    await tester.tap(find.descendant(of: find.byType(AlertDialog), matching: find.text('class2')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
+    // Verify none are selected initially
+    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'class1')).selected, isFalse);
+    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'class2')).selected, isFalse);
 
-    // Verify the label in the sidebar has been updated
-    expect(find.descendant(of: find.byType(Card), matching: find.text('class2')), findsOneWidget);
-  });
+    // Tap on the second class
+    await tester.tap(find.widgetWithText(ChoiceChip, 'class2'));
+    await tester.pumpAndSettle();
 
-  testWidgets('Edit label dialog shows project classes', (WidgetTester tester) async {
-    final project = Project(name: 'Test Project', projectPath: '/tmp', classes: ['class1', 'class2']);
-    final image = ProjectImage(
-      name: 'Test Image',
-      bytes: kTestImageBytes,
-      annotation: Annotation(
-        boxes: [
-          BoundingBox(left: 0, top: 0, right: 10, bottom: 10, label: 'class1'),
-        ],
-      ),
-    );
+    // Verify the second chip is selected and the first is not
+    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'class1')).selected, isFalse);
+    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'class2')).selected, isTrue);
 
-    await tester.pumpWidget(MaterialApp(
-      home: AnnotationScreen(image: image, project: project),
-    ));
+     // Tap on the first class
+    await tester.tap(find.widgetWithText(ChoiceChip, 'class1'));
+    await tester.pumpAndSettle();
 
-    // The sidebar shows the initial label within a Card
-    expect(find.descendant(of: find.byType(Card), matching: find.text('class1')), findsOneWidget);
-
-    final editIconFinder = find.descendant(of: find.widgetWithText(Card, 'class1'), matching: find.byIcon(Icons.edit));
-    await tester.ensureVisible(editIconFinder);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    await tester.tap(editIconFinder);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-
-    // Verify both classes are shown in the dialog
-    expect(find.descendant(of: find.byType(AlertDialog), matching: find.text('class1')), findsOneWidget);
-    expect(find.descendant(of: find.byType(AlertDialog), matching: find.text('class2')), findsOneWidget);
+    // Verify the first chip is selected and the second is not
+    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'class1')).selected, isTrue);
+    expect(tester.widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'class2')).selected, isFalse);
   });
 }

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/project.dart';
+import '../data/models/project_model.dart';
 
 class ProjectService {
   static const projectsKey = 'projects';

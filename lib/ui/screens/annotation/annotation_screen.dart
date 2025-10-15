@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import '../../../models/bounding_box.dart';
-import '../../../models/image.dart';
-import '../../../models/project.dart';
+import 'package:path/path.dart' as p;
+import '../../../data/models/bounding_box_model.dart';
+import '../../../data/models/image_model.dart';
+import '../../../data/models/project_model.dart';
 import './drawing_canvas.dart';
 
 class AnnotationScreen extends StatefulWidget {
@@ -50,13 +52,52 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
     });
   }
 
-  void _saveAnnotations() {
-    final updatedImage = ProjectImage(
-      name: widget.image.name,
-      bytes: widget.image.bytes,
-      annotation: widget.image.annotation.copyWith(boxes: _boxes),
-    );
-    Navigator.of(context).pop(updatedImage);
+  Future<void> _saveAnnotations() async {
+    if (_image == null) return;
+
+    final imageWidth = _image!.width;
+    final imageHeight = _image!.height;
+
+    final yoloStrings = _boxes.map((box) {
+      final classIndex = widget.project.classes.indexOf(box.label);
+      if (classIndex == -1) return null;
+
+      final centerX = (box.left + box.right) / 2 / imageWidth;
+      final centerY = (box.top + box.bottom) / 2 / imageHeight;
+      final width = (box.right - box.left) / imageWidth;
+      final height = (box.bottom - box.top) / imageHeight;
+
+      return '$classIndex $centerX $centerY $width $height';
+    }).where((item) => item != null).join('\n');
+
+    final imageName = p.basenameWithoutExtension(widget.image.name);
+    final labelsDirPath = p.join(widget.project.projectPath, 'labels');
+    final labelFile = File(p.join(labelsDirPath, '$imageName.txt'));
+
+    try {
+      if (yoloStrings.isEmpty) {
+        if (await labelFile.exists()) {
+          await labelFile.delete();
+        }
+      } else {
+        await labelFile.writeAsString(yoloStrings);
+      }
+
+      final updatedImage = ProjectImage(
+        name: widget.image.name,
+        bytes: widget.image.bytes,
+        annotation: widget.image.annotation.copyWith(boxes: _boxes),
+      );
+      if (mounted) {
+        Navigator.of(context).pop(updatedImage);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving annotations: $e')),
+        );
+      }
+    }
   }
 
   void _commitChange(List<BoundingBox> newBoxes) {

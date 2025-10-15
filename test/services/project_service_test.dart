@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
-import 'package:labellab/models/project.dart';
-import 'package:labellab/services/project_service.dart';
+import 'package:label_lab/data/models/project_model.dart';
+import 'package:label_lab/services/project_service.dart';
 
 import 'project_service_test.mocks.dart';
 

@@ -2,7 +2,7 @@ import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:collection/collection.dart';
-import 'package:labellab/models/bounding_box.dart';
+import '../../../data/models/bounding_box_model.dart';
 
 // Constants
 const List<Color> _kPredefinedColors = [
@@ -263,7 +263,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     // Check for delete icon tap first
     if (_selectedBoxIndex != null) {
       final selectedBox = widget.boxes[_selectedBoxIndex!];
-      final iconCenter = selectedBox.toRect().topRight + Offset(_kDeleteIconSize / 4, -_kDeleteIconSize / 4);
+      final iconCenter = selectedBox.toRect().topRight + const Offset(_kDeleteIconSize / 4, -_kDeleteIconSize / 4);
       final deleteRect = Rect.fromCenter(center: iconCenter, width: _kDeleteIconSize, height: _kDeleteIconSize);
       if (deleteRect.contains(imageCoords)) {
         var updatedBoxes = List<BoundingBox>.from(widget.boxes)..removeAt(_selectedBoxIndex!);

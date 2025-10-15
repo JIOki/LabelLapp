@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import '../../../models/bounding_box.dart';
 import '../../../models/image.dart';
 import '../../../models/project.dart';
-import './annotation_sidebar.dart';
 import './drawing_canvas.dart';
 
 class AnnotationScreen extends StatefulWidget {
@@ -22,24 +21,17 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
   late List<BoundingBox> _boxes;
   ui.Image? _image;
   String? _selectedClass;
-  final TransformationController _transformationController = TransformationController();
 
-  // Stacks for Undo/Redo functionality
-  final List<List<BoundingBox>> _history = [];
-  final List<List<BoundingBox>> _redoStack = [];
+  late List<List<BoundingBox>> _history;
+  late List<List<BoundingBox>> _redoStack;
 
   @override
   void initState() {
     super.initState();
-    // Initialize boxes with a deep copy
     _boxes = widget.image.annotation.boxes.map((box) => box.copyWith()).toList();
+    _history = [_boxes.map((b) => b.copyWith()).toList()];
+    _redoStack = [];
     _loadImage();
-  }
-
-  @override
-  void dispose() {
-    _transformationController.dispose();
-    super.dispose();
   }
 
   Future<void> _loadImage() async {
@@ -67,49 +59,51 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
     Navigator.of(context).pop(updatedImage);
   }
 
-  // Adds the current state to the history stack and clears the redo stack
-  void _addStateToHistory() {
-    // Add a deep copy of the current boxes to history
-    _history.add(_boxes.map((b) => b.copyWith()).toList());
-    _redoStack.clear(); // A new action clears the redo stack
+  void _commitChange(List<BoundingBox> newBoxes) {
+    setState(() {
+      _boxes = newBoxes;
+      _history.add(_boxes.map((b) => b.copyWith()).toList());
+      _redoStack.clear();
+    });
   }
 
   void _undo() {
-    if (_history.isNotEmpty) {
-      // Add a deep copy of the current state to the redo stack
-      _redoStack.add(_boxes.map((b) => b.copyWith()).toList());
-      // Restore the previous state from history
+    if (_history.length > 1) {
       setState(() {
-        _boxes = _history.removeLast();
+        final currentState = _history.removeLast();
+        _redoStack.add(currentState);
+        _boxes = _history.last.map((b) => b.copyWith()).toList();
       });
     }
   }
 
   void _redo() {
     if (_redoStack.isNotEmpty) {
-      // Add a deep copy of the current state back to the history stack
-      _history.add(_boxes.map((b) => b.copyWith()).toList());
-      // Restore the next state from the redo stack
       setState(() {
-        _boxes = _redoStack.removeLast();
+        final redoneState = _redoStack.removeLast();
+        _history.add(redoneState);
+        _boxes = redoneState.map((b) => b.copyWith()).toList();
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final canUndo = _history.length > 1;
+    final canRedo = _redoStack.isNotEmpty;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.image.name),
+        title: Text(widget.image.name, overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
             icon: const Icon(Icons.undo),
-            onPressed: _history.isEmpty ? null : _undo,
+            onPressed: canUndo ? _undo : null,
             tooltip: 'Undo',
           ),
           IconButton(
             icon: const Icon(Icons.redo),
-            onPressed: _redoStack.isEmpty ? null : _redo,
+            onPressed: canRedo ? _redo : null,
             tooltip: 'Redo',
           ),
           IconButton(
@@ -119,65 +113,81 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
           ),
         ],
       ),
-      body: Row(
+      body: Column(
         children: [
           Expanded(
-            flex: 3,
             child: _image != null
-                ? InteractiveViewer(
-                    transformationController: _transformationController,
-                    boundaryMargin: const EdgeInsets.all(double.infinity),
-                    minScale: 0.5,
-                    maxScale: 4.0,
-                    child: DrawingCanvas(
-                      image: _image!,
-                      boxes: _boxes,
-                      selectedClass: _selectedClass,
-                      projectClasses: widget.project.classes,
-                      transformationController: _transformationController,
-                      onUpdate: (newBoxes) {
-                        _addStateToHistory();
-                        setState(() {
-                          _boxes = newBoxes;
-                        });
-                      },
+                ? Container(
+                    color: Colors.grey[800], 
+                    child: FittedBox(
+                      fit: BoxFit.contain,
+                      child: SizedBox.fromSize(
+                        size: Size(
+                          _image!.width.toDouble(),
+                          _image!.height.toDouble(),
+                        ),
+                        child: DrawingCanvas(
+                          image: _image!,
+                          boxes: _boxes,
+                          selectedClass: _selectedClass,
+                          projectClasses: widget.project.classes,
+                          onUpdate: (updatedBoxes) {
+                            setState(() {
+                               _boxes = updatedBoxes;
+                            });
+                          },
+                           onCommit: (newBoxes) => _commitChange(newBoxes),
+                        ),
+                      ),
                     ),
                   )
                 : const Center(child: CircularProgressIndicator()),
           ),
-          Expanded(
-            flex: 1,
-            child: AnnotationSidebar(
-              boxes: _boxes,
-              projectClasses: widget.project.classes,
-              selectedClass: _selectedClass,
-              onClassSelected: (className) {
-                setState(() {
-                  _selectedClass = className;
-                });
-              },
-              onDelete: (index) {
-                _addStateToHistory();
-                setState(() {
-                  _boxes.removeAt(index);
-                });
-              },
-              onEdit: (index, newLabel) {
-                _addStateToHistory();
-                setState(() {
-                  final oldBox = _boxes[index];
-                  _boxes[index] = BoundingBox(
-                    left: oldBox.left,
-                    top: oldBox.top,
-                    right: oldBox.right,
-                    bottom: oldBox.bottom,
-                    label: newLabel,
-                  );
-                });
-              },
-            ),
-          ),
+          _buildClassSelector(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildClassSelector() {
+    return Container(
+      height: 80, // Adjust height as needed
+      padding: const EdgeInsets.symmetric(vertical: 16.0),
+      color: Theme.of(context).bottomAppBarTheme.color,
+      child: Center(
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: widget.project.classes.map((className) {
+              final isSelected = _selectedClass == className;
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6.0),
+                child: ChoiceChip(
+                  label: Text(className),
+                  selected: isSelected,
+                  onSelected: (selected) {
+                    setState(() {
+                      if (selected) {
+                        _selectedClass = className;
+                      } else {
+                        // Optional: Allow deselecting the chip
+                        _selectedClass = null;
+                      }
+                    });
+                  },
+                  backgroundColor: Colors.grey[700],
+                  selectedColor: Theme.of(context).primaryColor,
+                  labelStyle: TextStyle(
+                    color: isSelected ? Colors.white : Colors.white70,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  ),
+                  shape: const StadiumBorder(),
+                ),
+              );
+            }).toList(),
+          ),
+        ),
       ),
     );
   }

@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
+import 'package:permission_handler/permission_handler.dart';
+
 import '../../../data/models/bounding_box_model.dart';
 import '../../../data/models/image_model.dart';
 import '../../../data/models/project_model.dart';
@@ -52,7 +55,28 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
     });
   }
 
+  Future<bool> _requestStoragePermission() async {
+    if (await Permission.manageExternalStorage.isGranted) {
+      return true;
+    }
+    final status = await Permission.manageExternalStorage.request();
+    return status.isGranted;
+  }
+
   Future<void> _saveAnnotations() async {
+    final hasPermission = await _requestStoragePermission();
+    if (!hasPermission) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Storage permission is required to save annotations.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
     if (_image == null) return;
 
     final imageWidth = _image!.width;
@@ -75,6 +99,11 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
     final labelFile = File(p.join(labelsDirPath, '$imageName.txt'));
 
     try {
+      final labelsDir = Directory(labelsDirPath);
+      if (!await labelsDir.exists()) {
+        await labelsDir.create(recursive: true);
+      }
+
       if (yoloStrings.isEmpty) {
         if (await labelFile.exists()) {
           await labelFile.delete();
@@ -83,15 +112,15 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
         await labelFile.writeAsString(yoloStrings);
       }
 
-      final updatedImage = ProjectImage(
-        name: widget.image.name,
-        bytes: widget.image.bytes,
+      final updatedImage = widget.image.copyWith(
         annotation: widget.image.annotation.copyWith(boxes: _boxes),
       );
+      
       if (mounted) {
         Navigator.of(context).pop(updatedImage);
       }
     } catch (e) {
+      if (kDebugMode) print('Error saving annotations: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error saving annotations: $e')),
@@ -159,7 +188,7 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
           Expanded(
             child: _image != null
                 ? Container(
-                    color: Colors.grey[800], 
+                    color: Colors.grey[800],
                     child: FittedBox(
                       fit: BoxFit.contain,
                       child: SizedBox.fromSize(
@@ -174,10 +203,10 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
                           projectClasses: widget.project.classes,
                           onUpdate: (updatedBoxes) {
                             setState(() {
-                               _boxes = updatedBoxes;
+                              _boxes = updatedBoxes;
                             });
                           },
-                           onCommit: (newBoxes) => _commitChange(newBoxes),
+                          onCommit: (newBoxes) => _commitChange(newBoxes),
                         ),
                       ),
                     ),
@@ -192,7 +221,7 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
 
   Widget _buildClassSelector() {
     return Container(
-      height: 80, // Adjust height as needed
+      height: 80,
       padding: const EdgeInsets.symmetric(vertical: 16.0),
       color: Theme.of(context).bottomAppBarTheme.color,
       child: Center(
@@ -212,7 +241,6 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
                       if (selected) {
                         _selectedClass = className;
                       } else {
-                        // Optional: Allow deselecting the chip
                         _selectedClass = null;
                       }
                     });

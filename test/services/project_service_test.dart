@@ -1,11 +1,14 @@
 import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/annotations.dart';
 import 'package:mockito/mockito.dart';
 import 'package:label_lab/data/models/project_model.dart';
 import 'package:label_lab/services/project_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'project_service_test.mocks.dart';
 
+@GenerateMocks([SharedPreferences])
 void main() {
   group('ProjectService', () {
     late ProjectService projectService;

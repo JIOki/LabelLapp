@@ -15,23 +15,26 @@ dependencies:
   cupertino_icons: ^1.0.6
   file_picker: ^8.0.0+1
   path_provider: ^2.0.15
-  permission_handler: ^11.0.1
+  permission_handler: ^12.0.1
   shared_preferences: ^2.2.2
   image: ^4.1.3
   archive: ^3.4.9
   share_plus: ^7.2.1
-  provider: ^6.1.1
+  provider: ^6.1.5+1
   google_fonts: ^6.1.0
-  uuid: ^4.3.3 # Añadido
-  collection: ^1.18.0 # Añadido
+  uuid: ^4.3.3
+  collection: ^1.18.0
   path: ^1.9.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^3.0.0
-  mockito: ^5.4.4 # Añadido
+  mockito: ^5.4.4
+  build_runner: ^2.9.0
 
 flutter:
   uses-material-design: true
   generate: true
+  assets:
+    - assets/images/

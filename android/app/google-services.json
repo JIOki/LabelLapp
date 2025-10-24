@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "667877001465",
+    "project_id": "labellab-app-project",
+    "storage_bucket": "labellab-app-project.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:667877001465:android:1462cb3b3f951083a77a28",
+        "android_client_info": {
+          "package_name": "com.example.labellab"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB13YOqEq47L9ZsvdWZjHJw9BM6V3RjfIE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

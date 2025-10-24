@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../../data/models/project_model.dart';
 import '../../../services/project_service.dart';
 import '../../../theme/app_theme.dart';
@@ -42,7 +43,28 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _createProject() async {
+  Future<void> _requestStoragePermission() async {
+    final status = await Permission.manageExternalStorage.request();
+
+    if (status.isGranted) {
+      _showCreateProjectDialog();
+    } else if (status.isPermanentlyDenied) {
+       if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Storage permission is permanently denied. Please enable it in app settings.')),
+        );
+        openAppSettings();
+       }
+    } else {
+      if(mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Storage permission is required to create a project.')),
+          );
+      }
+    }
+  }
+
+  Future<void> _showCreateProjectDialog() async {
     await showDialog<void>(
       context: context,
       builder: (context) => NewProjectDialog(
@@ -211,7 +233,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: _createProject,
+        onPressed: _requestStoragePermission,
         label: const Text('New Project'),
         icon: const Icon(Icons.add),
         tooltip: 'Create a new project',

@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -27,29 +26,29 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
   }
 
   Future<void> _setDefaultProjectLocation() async {
-    Directory? defaultDir;
     try {
-      // Use a common, user-accessible directory as the default.
-      defaultDir = await getDownloadsDirectory();
+      final defaultDir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
+      if (mounted) {
+        setState(() {
+          _projectLocation = defaultDir.path;
+        });
+      }
     } catch (e) {
       if (kDebugMode) {
-        print("Could not access downloads directory, falling back: $e");
+        print("Could not get default directory: $e");
       }
-      // Fallback to a directory guaranteed to be available.
-      defaultDir = await getApplicationDocumentsDirectory();
-    }
-
-    if (mounted) {
-      setState(() {
-        _projectLocation = defaultDir?.path;
-      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not determine a default folder.')));
+      }
     }
   }
 
   void _addClass() {
-    if (_classController.text.isNotEmpty) {
+    if (_classController.text.isNotEmpty &&
+        !_classes.contains(_classController.text.trim())) {
       setState(() {
-        _classes.add(_classController.text);
+        _classes.add(_classController.text.trim());
         _classController.clear();
       });
     }
@@ -72,89 +71,92 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return AlertDialog(
-      title: const Text('New Project'),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      title: Text('Create a New Project', style: theme.textTheme.headlineSmall),
       content: Form(
         key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextFormField(
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Project Name',
-                border: OutlineInputBorder(),
-              ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter a project name';
-                }
-                return null;
-              },
-              onSaved: (value) => _projectName = value!,
-            ),
-            const SizedBox(height: 16),
-            const Text('Project Location'),
-            const SizedBox(height: 4),
-            Row(
+        child: SingleChildScrollView(
+          child: SizedBox(
+            width: MediaQuery.of(context).size.width * 0.8,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: _projectLocation == null
-                        ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
-                        : Text(
-                            _projectLocation!,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                  ),
+                _buildSectionTitle(theme, 'Project Name'),
+                TextFormField(
+                  autofocus: true,
+                  decoration: _buildInputDecoration(theme, hintText: 'My Awesome Project'),
+                  validator: (value) =>
+                      (value == null || value.isEmpty) ? 'Please enter a name' : null,
+                  onSaved: (value) => _projectName = value!,
                 ),
-                IconButton(
-                  icon: const Icon(Icons.folder_open),
-                  onPressed: _selectProjectLocation,
-                  tooltip: 'Select Location',
+                const SizedBox(height: 24),
+                _buildSectionTitle(theme, 'Project Location'),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: _projectLocation == null
+                            ? const Center(
+                                child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2)))
+                            : Text(_projectLocation!, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodyMedium),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.folder_open_outlined),
+                      onPressed: _selectProjectLocation,
+                      tooltip: 'Select Location',
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                _buildSectionTitle(theme, 'Object Classes'),
+                TextField(
+                  controller: _classController,
+                  decoration: _buildInputDecoration(theme, hintText: 'Add a class (e.g., Cat, Dog)').copyWith(
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.add_circle_outline),
+                      onPressed: _addClass,
+                    ),
+                  ),
+                  onSubmitted: (_) => _addClass(),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8.0,
+                  runSpacing: 4.0,
+                  children: _classes
+                      .map((className) => Chip(
+                            label: Text(className),
+                            onDeleted: () => _removeClass(className),
+                            backgroundColor: theme.colorScheme.tertiaryContainer,
+                            labelStyle: theme.textTheme.labelLarge?.copyWith(
+                                color: theme.colorScheme.onTertiaryContainer),
+                            deleteIconColor: theme.colorScheme.onTertiaryContainer.withAlpha(178),
+                          ))
+                      .toList(),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _classController,
-              decoration: InputDecoration(
-                labelText: 'New Class',
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.add),
-                  onPressed: _addClass,
-                ),
-              ),
-              onSubmitted: (_) => _addClass(),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8.0,
-              runSpacing: 4.0,
-              children: _classes
-                  .map(
-                    (className) => Chip(
-                      label: Text(className),
-                      onDeleted: () => _removeClass(className),
-                    ),
-                  )
-                  .toList(),
-            ),
-          ],
+          ),
         ),
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
+            onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
         FilledButton(
           onPressed: () {
             if (_formKey.currentState!.validate() &&
@@ -162,12 +164,32 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
                 _projectLocation!.isNotEmpty) {
               _formKey.currentState!.save();
               widget.onCreate(_projectName, _projectLocation!, _classes);
-              Navigator.pop(context);
+               // No need to pop here, the caller will handle it.
             }
           },
-          child: const Text('Create'),
+          child: const Text('Create & Open'),
         ),
       ],
+    );
+  }
+
+  Widget _buildSectionTitle(ThemeData theme, String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Text(title, style: theme.textTheme.titleMedium),
+    );
+  }
+
+  InputDecoration _buildInputDecoration(ThemeData theme, {required String hintText}) {
+    return InputDecoration(
+      hintText: hintText,
+      filled: true,
+      fillColor: theme.colorScheme.surfaceContainerHighest,
+      contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12.0),
+        borderSide: BorderSide.none,
+      ),
     );
   }
 }

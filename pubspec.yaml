@@ -21,15 +21,17 @@ dependencies:
   archive: ^3.4.9
   share_plus: ^7.2.1
   provider: ^6.1.5+1
-  google_fonts: ^6.1.0
+  google_fonts: ^6.3.2
   uuid: ^4.3.3
   collection: ^1.18.0
   path: ^1.9.1
+  camera: ^0.11.3
+  wakelock_plus: ^1.4.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.0
+  flutter_lints: ^6.0.0
   mockito: ^5.4.4
   build_runner: ^2.9.0
 

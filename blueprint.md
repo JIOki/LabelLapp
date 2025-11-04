@@ -1,58 +1,64 @@
-# Blueprint: Aplicación de Anotación de Imágenes - LabelLab
+# Blueprint: BBox Annotator
 
-Este documento sirve como la única fuente de verdad para el desarrollo de la aplicación de anotación de imágenes "LabelLab". Describe el propósito, las características, el diseño y el plan de acción actual del proyecto.
+## Overview
 
-## 1. Visión General
+This document outlines the project structure, features, and design principles of the BBox Annotator application. It serves as a single source of truth for the app's capabilities and architecture, and is updated with each new feature implementation.
 
-LabelLab es una aplicación de escritorio y móvil construida con Flutter, diseñada para simplificar y acelerar el proceso de etiquetado de imágenes para modelos de Computer Vision. La aplicación permite a los usuarios importar imágenes, definir clases y dibujar cuadros delimitadores (`bounding boxes`) sobre objetos, para finalmente exportar las anotaciones en formatos estándar como YOLO.
+## Core Features
 
-## 2. Arquitectura y Diseño
+BBox Annotator is a Flutter-based mobile tool for creating image annotation datasets for object detection models.
 
-- **Framework:** Flutter
-- **Lenguaje:** Dart
-- **Almacenamiento:** El proyecto y las imágenes se gestionan directamente en el sistema de archivos local del usuario, promoviendo la privacidad y el control total de los datos.
-- **Interfaz:** La aplicación sigue los principios de Material Design, buscando una experiencia de usuario limpia, intuitiva y eficiente.
-
-## 3. Características Implementadas (Fase 1 - Concluida)
-
-- **Creación de Proyectos:** Los usuarios pueden crear un nuevo proyecto especificando un nombre y una ubicación en el sistema de archivos.
-- **Gestión de Imágenes:**
-  - **Importación Múltiple:** Permite añadir imágenes desde archivos individuales o carpetas enteras.
-  - **Procesamiento de Imágenes:** Las imágenes importadas se redimensionan a un ancho estándar (640px) para optimizar el rendimiento y el almacenamiento.
-  - **Visualización:** Las imágenes se muestran en una cuadrícula (`GridView`) en la pantalla del proyecto, con indicadores visuales para mostrar si ya han sido anotadas.
-- **Gestión de Clases:** Los usuarios pueden definir y editar una lista de clases (etiquetas) para cada proyecto.
-- **Anotación de Imágenes:**
-  - **Interfaz de Anotación Robusta:** Una pantalla dedicada permite a los usuarios dibujar, seleccionar, mover y redimensionar cuadros delimitadores.
-  - **Interacción Fluida en Tiempo Real:** Las transformaciones (mover, redimensionar) de las cajas se reflejan instantáneamente, siguiendo el gesto del usuario para una experiencia natural.
-  - **Asignación de Clases y Colores:** Cada cuadro delimitador se asocia con una clase y se muestra con un color distintivo.
-- **Funcionalidad de Deshacer y Rehacer (Undo/Redo):**
-    - Un sistema de historial de estados robusto y centralizado permite revertir y restaurar de forma fiable todas las acciones de anotación.
-- **Optimización de Rendimiento:**
-    - El lienzo de dibujo utiliza una técnica de `RepaintBoundary` y `CustomPainter` de dos capas para separar el renderizado de la imagen estática de las anotaciones dinámicas, garantizando una alta fluidez incluso con imágenes grandes.
-- **Exportación de Proyectos:**
-  - **Formato YOLO:** Los proyectos se pueden exportar como un archivo ZIP que contiene las imágenes, los archivos de texto de anotación en formato YOLO, y un archivo `classes.txt`.
-  - **Función de Compartir:** Se utiliza el paquete `share_plus` para permitir al usuario compartir el archivo ZIP exportado.
+*   **Project Management:**
+    *   Create, list, search, and delete annotation projects.
+    *   Each project has a name, a location on the device, and a defined set of class labels.
+*   **Image Handling:**
+    *   Import images into a project from the device's file system (single files or entire folders).
+    *   View imported images in a grid layout.
+*   **Annotation:**
+    *   A dedicated annotation screen allows users to draw bounding boxes on images.
+    *   Each box is assigned a class from the project's label list.
+*   **Data Export:**
+    *   Export projects as a ZIP file containing the images and corresponding label files in YOLO format.
+    *   Includes a `classes.txt` file with the list of labels.
+*   **Modern User Experience:**
+    *   A visually appealing UI with a subtle background texture and custom project cards.
+    *   Support for both light and dark modes, with a theme toggle.
+    *   Uses modern, clean typography (`GoogleFonts`).
 
 ---
 
-## 4. Línea de Acción Actual: Fase 2 - Refinamiento y Experiencia de Usuario
+## Current Feature: Camera Capture Module
 
-**Objetivo:** Transformar la aplicación de una herramienta funcional a una experiencia de usuario pulida, intuitiva y agradable.
+This section details the plan and implementation of the recently added camera capture functionality, designed to make data acquisition faster and more direct.
 
-**Estado Actual:** La funcionalidad principal de la aplicación está completa, es estable y tiene un rendimiento óptimo.
+### Objective
 
-**Próximos Pasos:**
+To integrate a new, independent module that allows users to capture images and videos directly from the device's camera into an active project, complete with advanced controls for a better capture experience.
 
-1.  **Pulido Visual y de Interfaz (UI Polish):**
-    - **Mejorar Iconos:** Reemplazar los botones de texto de la barra de acciones (Deshacer, Rehacer, Guardar) por iconos de Material Design claros y reconocibles.
-    - **Optimizar Selección de Clase:** Sustituir la lista actual de `ElevatedButton` para las clases por un control más elegante y escalable, como un `DropdownButton` o una lista de `Chips` seleccionables.
-    - **Estética General:** Revisar espaciados, colores y tipografía para asegurar una presentación visualmente equilibrada y profesional.
+### Implementation Plan & Features
 
-2.  **Guía de Inicio Rápido (Onboarding):**
-    - **Implementar un Mini-Tutorial:** Al abrir la pantalla de anotación por primera vez en un proyecto, se mostrará una superposición o un diálogo simple.
-    - **Contenido del Tutorial:** Explicará las tres interacciones básicas de forma gráfica y concisa:
-        - "Arrastra en un área vacía para **Dibujar** una nueva caja."
-        - "Arrastra una caja o sus bordes para **Moverla** o **Redimensionarla**."
-        - "Toca una caja para **Seleccionarla** y toca el icono de la papelera para **Eliminarla**."
+1.  **Dependencies Added:**
+    *   `camera`: The core package for controlling the device camera hardware.
+    *   `wakelock`: To prevent the screen from sleeping during capture sessions.
+    *   `permission_handler`: To robustly request and manage camera and microphone permissions.
 
-**¿En qué debería trabajar ahora?**
+2.  **Modified Entry Point:**
+    *   The "Add Images" `FloatingActionButton` on the `ProjectScreen` was updated.
+    *   It now opens a `showModalBottomSheet` presenting three clear options: "From Files", "From Folder", and the new "Use Camera".
+
+3.  **Independent Camera Module (`lib/ui/screens/camera/camera_screen.dart`):
+    *   **Self-Contained:** All camera logic is encapsulated within this new screen to avoid altering existing code.
+    *   **Permission Handling:** The screen first requests camera and microphone permissions. If denied, it shows an informative message with a shortcut to the app's settings.
+    *   **Screen Lock:** `Wakelock` is enabled when the screen is active and disabled when it's closed to ensure uninterrupted use.
+    *   **Dual Mode:** Users can switch between a "Photo" mode and a "Video" mode.
+    *   **Advanced Controls (Photo Mode):**
+        *   **Zoom:** A slider allows for smooth control of the camera's zoom level.
+        *   **Timer:** A slider sets an interval (in seconds) for automatic, periodic photo capture.
+    *   **Capture & Recording:**
+        *   A central button handles all actions: take a photo, start/stop auto-capture, or start/stop video recording.
+    *   **File Organization:**
+        *   Captured **images** are saved directly to the project's `images/` folder.
+        *   Recorded **videos** are saved to a new `videos/` folder within the project, which is created if it doesn't exist.
+
+4.  **Seamless Integration:**
+    *   Upon closing the camera screen, a callback is triggered that automatically refreshes the `ProjectScreen`, making newly captured images immediately visible in the project's image grid.

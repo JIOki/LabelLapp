@@ -1,34 +1,201 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
 
 import '../../../data/models/bounding_box_model.dart';
 import '../../../data/models/image_model.dart';
 import '../../../data/models/project_model.dart';
+import '../../../services/project_service.dart';
 import './drawing_canvas.dart';
 
 class AnnotationScreen extends StatefulWidget {
-  final ProjectImage image;
+  final List<ProjectImage> images;
   final Project project;
+  final int initialIndex;
 
-  const AnnotationScreen(
-      {super.key, required this.image, required this.project});
+  const AnnotationScreen({
+    super.key,
+    required this.images,
+    required this.project,
+    required this.initialIndex,
+  });
 
   @override
   State<AnnotationScreen> createState() => _AnnotationScreenState();
 }
 
 class _AnnotationScreenState extends State<AnnotationScreen> {
+  late PageController _pageController;
+  late List<ProjectImage> _updatedImages;
+  late int _currentIndex;
+  late Map<int, GlobalKey<_AnnotationPageState>> _pageKeys;
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+    _updatedImages = List.from(widget.images);
+    _pageKeys = {
+      for (var i = 0; i < widget.images.length; i++)
+        i: GlobalKey<_AnnotationPageState>()
+    };
+    _pageController.addListener(_onPageChanged);
+  }
+
+  @override
+  void dispose() {
+    _pageController.removeListener(_onPageChanged);
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _onPageChanged() {
+    final newIndex = _pageController.page?.round();
+    if (newIndex != null && newIndex != _currentIndex) {
+      // Auto-save previous page, show error on failure.
+      _saveAnnotationsForPage(_currentIndex, showErrorSnackbar: true);
+      setState(() {
+        _currentIndex = newIndex;
+      });
+    }
+  }
+
+  Future<bool> _saveAnnotationsForPage(int pageIndex, {bool showErrorSnackbar = false}) async {
+    final pageState = _pageKeys[pageIndex]?.currentState;
+    if (pageState == null) return false;
+
+    final updatedImage = await pageState.saveAnnotations();
+    if (updatedImage != null) {
+      if (mounted) {
+        setState(() {
+          _updatedImages[pageIndex] = updatedImage;
+        });
+      }
+      return true; // Success
+    } else {
+      if (mounted && showErrorSnackbar) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving annotations for ${_updatedImages[pageIndex].name}')),
+        );
+      }
+      return false; // Failure
+    }
+  }
+
+  Future<void> _saveAndExit() async {
+    if (_isSaving) return;
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    // Save and check for success. Do not show default error snackbar from here.
+    final success = await _saveAnnotationsForPage(_currentIndex, showErrorSnackbar: false);
+
+    if (mounted) {
+      if (success) {
+        Navigator.of(context).pop(_updatedImages);
+      } else {
+        // On failure, show a specific error and reset the button.
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not save. Please try again.')),
+        );
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? result) {
+        if (didPop) return;
+        _saveAndExit();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          leading: BackButton(onPressed: _isSaving ? null : _saveAndExit),
+          title: Text(
+            _updatedImages.isNotEmpty ? '${_updatedImages[_currentIndex].name} (${_currentIndex + 1}/${_updatedImages.length})' : '',
+            overflow: TextOverflow.ellipsis,
+          ),
+          actions: [
+            Builder(builder: (context) {
+              final pageState = _pageKeys[_currentIndex]?.currentState;
+              return IconButton(
+                icon: const Icon(Icons.undo),
+                onPressed: pageState?.canUndo == true ? pageState?.undo : null,
+              );
+            }),
+            Builder(builder: (context) {
+              final pageState = _pageKeys[_currentIndex]?.currentState;
+              return IconButton(
+                icon: const Icon(Icons.redo),
+                onPressed: pageState?.canRedo == true ? pageState?.redo : null,
+              );
+            }),
+          ],
+        ),
+        body: PageView.builder(
+          controller: _pageController,
+          itemCount: _updatedImages.length,
+          itemBuilder: (context, index) {
+            return AnnotationPage(
+              key: _pageKeys[index],
+              image: _updatedImages[index],
+              project: widget.project,
+              onStateUpdate: () => setState(() {}),
+            );
+          },
+        ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: _isSaving ? null : _saveAndExit,
+          tooltip: 'Save & Exit',
+          child: _isSaving
+              ? const CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.white))
+              : const Icon(Icons.save),
+        ),
+      ),
+    );
+  }
+}
+
+class AnnotationPage extends StatefulWidget {
+  final ProjectImage image;
+  final Project project;
+  final VoidCallback onStateUpdate;
+
+  const AnnotationPage({
+    super.key,
+    required this.image,
+    required this.project,
+    required this.onStateUpdate,
+  });
+
+  @override
+  State<AnnotationPage> createState() => _AnnotationPageState();
+}
+
+class _AnnotationPageState extends State<AnnotationPage> with AutomaticKeepAliveClientMixin {
   late List<BoundingBox> _boxes;
   ui.Image? _image;
   String? _selectedClass;
-
   late List<List<BoundingBox>> _history;
   late List<List<BoundingBox>> _redoStack;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  bool get canUndo => _history.length > 1;
+  bool get canRedo => _redoStack.isNotEmpty;
 
   @override
   void initState() {
@@ -41,181 +208,109 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
 
   Future<void> _loadImage() async {
     final completer = Completer<ui.Image>();
-    final imageProvider = MemoryImage(widget.image.bytes);
-    imageProvider
-        .resolve(const ImageConfiguration())
-        .addListener(ImageStreamListener((info, _) {
-      if (!completer.isCompleted) {
-        completer.complete(info.image);
-      }
-    }));
+    MemoryImage(widget.image.bytes).resolve(const ImageConfiguration()).addListener(
+      ImageStreamListener((info, _) {
+        if (!completer.isCompleted) completer.complete(info.image);
+      }),
+    );
     final loadedImage = await completer.future;
-    setState(() {
-      _image = loadedImage;
-    });
+    if (mounted) setState(() => _image = loadedImage);
   }
 
-  Future<bool> _requestStoragePermission() async {
-    if (await Permission.manageExternalStorage.isGranted) {
-      return true;
-    }
-    final status = await Permission.manageExternalStorage.request();
-    return status.isGranted;
-  }
-
-  Future<void> _saveAnnotations() async {
-    final hasPermission = await _requestStoragePermission();
-    if (!hasPermission) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Storage permission is required to save annotations.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-      return;
-    }
-
-    if (_image == null) return;
-
-    final imageWidth = _image!.width;
-    final imageHeight = _image!.height;
-
-    final yoloStrings = _boxes.map((box) {
-      final classIndex = widget.project.classes.indexOf(box.label);
-      if (classIndex == -1) return null;
-
-      final centerX = (box.left + box.right) / 2 / imageWidth;
-      final centerY = (box.top + box.bottom) / 2 / imageHeight;
-      final width = (box.right - box.left) / imageWidth;
-      final height = (box.bottom - box.top) / imageHeight;
-
-      return '$classIndex $centerX $centerY $width $height';
-    }).where((item) => item != null).join('\n');
-
-    final imageName = p.basenameWithoutExtension(widget.image.name);
-    final labelsDirPath = p.join(widget.project.projectPath, 'labels');
-    final labelFile = File(p.join(labelsDirPath, '$imageName.txt'));
-
-    try {
-      final labelsDir = Directory(labelsDirPath);
-      if (!await labelsDir.exists()) {
-        await labelsDir.create(recursive: true);
-      }
-
-      if (yoloStrings.isEmpty) {
-        if (await labelFile.exists()) {
-          await labelFile.delete();
-        }
-      } else {
-        await labelFile.writeAsString(yoloStrings);
-      }
-
-      final updatedImage = widget.image.copyWith(
-        annotation: widget.image.annotation.copyWith(boxes: _boxes),
-      );
-      
-      if (mounted) {
-        Navigator.of(context).pop(updatedImage);
-      }
-    } catch (e) {
-      if (kDebugMode) print('Error saving annotations: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving annotations: $e')),
-        );
-      }
-    }
-  }
-
-  void _commitChange(List<BoundingBox> newBoxes) {
+  void commitChange(List<BoundingBox> newBoxes) {
     setState(() {
       _boxes = newBoxes;
       _history.add(_boxes.map((b) => b.copyWith()).toList());
       _redoStack.clear();
+      widget.onStateUpdate();
     });
   }
 
-  void _undo() {
-    if (_history.length > 1) {
+  void undo() {
+    if (canUndo) {
       setState(() {
-        final currentState = _history.removeLast();
-        _redoStack.add(currentState);
+        _redoStack.add(_history.removeLast());
         _boxes = _history.last.map((b) => b.copyWith()).toList();
+        widget.onStateUpdate();
       });
     }
   }
 
-  void _redo() {
-    if (_redoStack.isNotEmpty) {
+  void redo() {
+    if (canRedo) {
       setState(() {
         final redoneState = _redoStack.removeLast();
         _history.add(redoneState);
         _boxes = redoneState.map((b) => b.copyWith()).toList();
+        widget.onStateUpdate();
       });
     }
   }
 
+  Future<ProjectImage?> saveAnnotations() async {
+    final projectService = Provider.of<ProjectService>(context, listen: false);
+
+    final hasPermission = await _requestStoragePermission();
+    if (!hasPermission) return null;
+
+    if (_image == null) return null;
+
+    final yoloStrings = _boxes.map((box) {
+      final classIndex = widget.project.classes.indexOf(box.label);
+      if (classIndex == -1) return null;
+      final centerX = (box.left + box.right) / 2 / _image!.width;
+      final centerY = (box.top + box.bottom) / 2 / _image!.height;
+      final width = (box.right - box.left) / _image!.width;
+      final height = (box.bottom - box.top) / _image!.height;
+      return '$classIndex $centerX $centerY $width $height';
+    }).whereType<String>().join('\n');
+
+    final success = await projectService.saveLabelForImage(
+      projectPath: widget.project.projectPath,
+      imageName: widget.image.name,
+      yoloString: yoloStrings,
+    );
+
+    return success ? widget.image.copyWith(annotation: widget.image.annotation.copyWith(boxes: _boxes)) : null;
+  }
+
+  Future<bool> _requestStoragePermission() async {
+    if (kIsWeb) return true;
+    var status = await Permission.manageExternalStorage.status;
+    if (!status.isGranted) {
+      status = await Permission.manageExternalStorage.request();
+    }
+    return status.isGranted;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final canUndo = _history.length > 1;
-    final canRedo = _redoStack.isNotEmpty;
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.image.name, overflow: TextOverflow.ellipsis),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.undo),
-            onPressed: canUndo ? _undo : null,
-            tooltip: 'Undo',
-          ),
-          IconButton(
-            icon: const Icon(Icons.redo),
-            onPressed: canRedo ? _redo : null,
-            tooltip: 'Redo',
-          ),
-          IconButton(
-            icon: const Icon(Icons.save),
-            onPressed: _saveAnnotations,
-            tooltip: 'Save Annotations',
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _image != null
-                ? Container(
-                    color: Colors.grey[800],
-                    child: FittedBox(
-                      fit: BoxFit.contain,
-                      child: SizedBox.fromSize(
-                        size: Size(
-                          _image!.width.toDouble(),
-                          _image!.height.toDouble(),
-                        ),
-                        child: DrawingCanvas(
-                          image: _image!,
-                          boxes: _boxes,
-                          selectedClass: _selectedClass,
-                          projectClasses: widget.project.classes,
-                          onUpdate: (updatedBoxes) {
-                            setState(() {
-                              _boxes = updatedBoxes;
-                            });
-                          },
-                          onCommit: (newBoxes) => _commitChange(newBoxes),
-                        ),
+    super.build(context);
+    return Column(
+      children: [
+        Expanded(
+          child: _image != null
+              ? Container(
+                  color: Colors.grey[800],
+                  child: FittedBox(
+                    fit: BoxFit.contain,
+                    child: SizedBox.fromSize(
+                      size: Size(_image!.width.toDouble(), _image!.height.toDouble()),
+                      child: DrawingCanvas(
+                        image: _image!,
+                        boxes: _boxes,
+                        selectedClass: _selectedClass,
+                        projectClasses: widget.project.classes,
+                        onUpdate: (updatedBoxes) => setState(() => _boxes = updatedBoxes),
+                        onCommit: commitChange,
                       ),
                     ),
-                  )
-                : const Center(child: CircularProgressIndicator()),
-          ),
-          _buildClassSelector(),
-        ],
-      ),
+                  ),
+                )
+              : const Center(child: CircularProgressIndicator()),
+        ),
+        _buildClassSelector(),
+      ],
     );
   }
 
@@ -236,22 +331,7 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
                 child: ChoiceChip(
                   label: Text(className),
                   selected: isSelected,
-                  onSelected: (selected) {
-                    setState(() {
-                      if (selected) {
-                        _selectedClass = className;
-                      } else {
-                        _selectedClass = null;
-                      }
-                    });
-                  },
-                  backgroundColor: Colors.grey[700],
-                  selectedColor: Theme.of(context).primaryColor,
-                  labelStyle: TextStyle(
-                    color: isSelected ? Colors.white : Colors.white70,
-                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                  ),
-                  shape: const StadiumBorder(),
+                  onSelected: (selected) => setState(() => _selectedClass = selected ? className : null),
                 ),
               );
             }).toList(),

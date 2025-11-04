@@ -14,9 +14,11 @@ void main() {
     late ProjectService projectService;
     late MockSharedPreferences mockSharedPreferences;
 
-    setUp(() {
+    // MODIFIED: setUp is now async to accommodate the new service creation.
+    setUp(() async {
       mockSharedPreferences = MockSharedPreferences();
-      projectService = ProjectService.fromPrefs(mockSharedPreferences);
+      // MODIFIED: Use the new factory to create the service with the mock dependency.
+      projectService = await ProjectService.create(prefs: mockSharedPreferences);
     });
 
     test('getProjects returns empty list when there are no projects', () async {
@@ -49,7 +51,6 @@ void main() {
       ];
       final projectsJson = jsonEncode(projects.map((p) => p.toJson()).toList());
 
-      // Add the missing stub
       when(mockSharedPreferences.setString(any, any))
           .thenAnswer((_) async => true);
 

@@ -27,7 +27,8 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
 
   Future<void> _setDefaultProjectLocation() async {
     try {
-      final defaultDir = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
+      final defaultDir = await getDownloadsDirectory() ??
+          await getApplicationDocumentsDirectory();
       if (mounted) {
         setState(() {
           _projectLocation = defaultDir.path;
@@ -38,8 +39,8 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
         print("Could not get default directory: $e");
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not determine a default folder.')));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Could not determine a default folder.')));
       }
     }
   }
@@ -88,9 +89,11 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
                 _buildSectionTitle(theme, 'Project Name'),
                 TextFormField(
                   autofocus: true,
-                  decoration: _buildInputDecoration(theme, hintText: 'My Awesome Project'),
-                  validator: (value) =>
-                      (value == null || value.isEmpty) ? 'Please enter a name' : null,
+                  decoration: _buildInputDecoration(theme,
+                      hintText: 'My Awesome Project'),
+                  validator: (value) => (value == null || value.isEmpty)
+                      ? 'Please enter a name'
+                      : null,
                   onSaved: (value) => _projectName = value!,
                 ),
                 const SizedBox(height: 24),
@@ -112,7 +115,9 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
                                     height: 20,
                                     child: CircularProgressIndicator(
                                         strokeWidth: 2)))
-                            : Text(_projectLocation!, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodyMedium),
+                            : Text(_projectLocation!,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodyMedium),
                       ),
                     ),
                     IconButton(
@@ -126,7 +131,9 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
                 _buildSectionTitle(theme, 'Object Classes'),
                 TextField(
                   controller: _classController,
-                  decoration: _buildInputDecoration(theme, hintText: 'Add a class (e.g., Cat, Dog)').copyWith(
+                  decoration: _buildInputDecoration(theme,
+                          hintText: 'Add a class (e.g., Cat, Dog)')
+                      .copyWith(
                     suffixIcon: IconButton(
                       icon: const Icon(Icons.add_circle_outline),
                       onPressed: _addClass,
@@ -142,10 +149,13 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
                       .map((className) => Chip(
                             label: Text(className),
                             onDeleted: () => _removeClass(className),
-                            backgroundColor: theme.colorScheme.tertiaryContainer,
+                            backgroundColor:
+                                theme.colorScheme.tertiaryContainer,
                             labelStyle: theme.textTheme.labelLarge?.copyWith(
                                 color: theme.colorScheme.onTertiaryContainer),
-                            deleteIconColor: theme.colorScheme.onTertiaryContainer.withAlpha(178),
+                            deleteIconColor: theme
+                                .colorScheme.onTertiaryContainer
+                                .withAlpha(178),
                           ))
                       .toList(),
                 ),
@@ -156,7 +166,8 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel')),
         FilledButton(
           onPressed: () {
             if (_formKey.currentState!.validate() &&
@@ -164,7 +175,7 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
                 _projectLocation!.isNotEmpty) {
               _formKey.currentState!.save();
               widget.onCreate(_projectName, _projectLocation!, _classes);
-               // No need to pop here, the caller will handle it.
+              // No need to pop here, the caller will handle it.
             }
           },
           child: const Text('Create & Open'),
@@ -180,7 +191,8 @@ class _NewProjectDialogState extends State<NewProjectDialog> {
     );
   }
 
-  InputDecoration _buildInputDecoration(ThemeData theme, {required String hintText}) {
+  InputDecoration _buildInputDecoration(ThemeData theme,
+      {required String hintText}) {
     return InputDecoration(
       hintText: hintText,
       filled: true,

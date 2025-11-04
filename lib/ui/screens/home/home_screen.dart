@@ -77,8 +77,10 @@ class _HomeScreenState extends State<HomeScreen> {
             classes: classes,
           );
 
-          await Directory(p.join(projectPath, 'images')).create(recursive: true);
-          await Directory(p.join(projectPath, 'labels')).create(recursive: true);
+          await Directory(p.join(projectPath, 'images'))
+              .create(recursive: true);
+          await Directory(p.join(projectPath, 'labels'))
+              .create(recursive: true);
 
           // Read the current projects, add the new one, and save back.
           final currentProjects = await projectService.getProjects();
@@ -220,7 +222,8 @@ class _HomeScreenState extends State<HomeScreen> {
           prefixIcon: const Icon(Icons.search, size: 20),
           filled: true,
           fillColor: theme.colorScheme.surfaceContainer,
-          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+          contentPadding:
+              const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(30.0),
             borderSide: BorderSide.none,

@@ -23,7 +23,8 @@ class CameraScreen extends StatefulWidget {
   State<CameraScreen> createState() => _CameraScreenState();
 }
 
-class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver {
+class _CameraScreenState extends State<CameraScreen>
+    with WidgetsBindingObserver {
   CameraController? _controller;
   bool _isCameraInitialized = false;
   bool _isPermissionGranted = false;
@@ -46,7 +47,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     WakelockPlus.enable();
     _requestPermissionsAndInitialize();
   }
-  
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -62,8 +63,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     if (state == AppLifecycleState.resumed) {
       _requestPermissionsAndInitialize();
     } else if (state == AppLifecycleState.inactive) {
-      if(_controller?.value.isInitialized ?? false) {
-         _controller!.dispose();
+      if (_controller?.value.isInitialized ?? false) {
+        _controller!.dispose();
       }
     }
   }
@@ -74,8 +75,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       Permission.microphone,
     ].request();
 
-    final isGranted = statuses[Permission.camera] == PermissionStatus.granted && 
-                      statuses[Permission.microphone] == PermissionStatus.granted;
+    final isGranted = statuses[Permission.camera] == PermissionStatus.granted &&
+        statuses[Permission.microphone] == PermissionStatus.granted;
 
     if (mounted) {
       setState(() => _isPermissionGranted = isGranted);
@@ -96,7 +97,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     _controller = CameraController(
       cameras.first,
       ResolutionPreset.high,
-      enableAudio: !_isPhotoMode, 
+      enableAudio: !_isPhotoMode,
     );
 
     try {
@@ -141,12 +142,13 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         final video = await _controller!.stopVideoRecording();
         if (mounted) setState(() => _isRecording = false);
 
-        final videosDir = Directory(p.join(widget.project.projectPath, 'videos'));
+        final videosDir =
+            Directory(p.join(widget.project.projectPath, 'videos'));
         await videosDir.create(recursive: true);
         final fileName = '${DateTime.now().millisecondsSinceEpoch}.mp4';
         final newPath = p.join(videosDir.path, fileName);
         await File(video.path).copy(newPath);
-        await File(video.path).delete(); 
+        await File(video.path).delete();
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -172,8 +174,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       if (mounted) setState(() => _isAutoCapturing = false);
     } else {
       if (_timerSeconds < 1) return;
-      _autoCaptureTimer = Timer.periodic(Duration(seconds: _timerSeconds.toInt()), (timer) {
-        if(!_isRecording) _onTakePhotoPressed();
+      _autoCaptureTimer =
+          Timer.periodic(Duration(seconds: _timerSeconds.toInt()), (timer) {
+        if (!_isRecording) _onTakePhotoPressed();
       });
       if (mounted) setState(() => _isAutoCapturing = true);
     }
@@ -184,7 +187,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        backgroundColor: Colors.transparent, elevation: 0,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.close, color: Colors.white),
           onPressed: () => Navigator.of(context).pop(),
@@ -195,8 +199,12 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   }
 
   Widget _buildBody() {
-    if (!_isPermissionGranted) return _buildPermissionDeniedWidget();
-    if (!_isCameraInitialized || _controller == null) return const Center(child: CircularProgressIndicator());
+    if (!_isPermissionGranted) {
+      return _buildPermissionDeniedWidget();
+    }
+    if (!_isCameraInitialized || _controller == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
     return Stack(
       children: [
         Positioned.fill(child: CameraPreview(_controller!)),
@@ -212,11 +220,13 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.videocam_off_outlined, color: Colors.white, size: 64),
+            const Icon(Icons.videocam_off_outlined,
+                color: Colors.white, size: 64),
             const SizedBox(height: 24),
             const Text(
               'Camera and microphone access is needed to capture images and videos.',
-              style: TextStyle(color: Colors.white, fontSize: 16), textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white, fontSize: 16),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
             ElevatedButton(
@@ -235,7 +245,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   Widget _buildControls() {
     final theme = Theme.of(context);
     return Positioned(
-      bottom: 0, left: 0, right: 0,
+      bottom: 0,
+      left: 0,
+      right: 0,
       child: Container(
         padding: const EdgeInsets.all(16).copyWith(bottom: 32),
         color: Colors.black.withAlpha(128),
@@ -250,7 +262,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                     const Icon(Icons.zoom_out, color: Colors.white),
                     Expanded(
                       child: Slider(
-                        value: _currentZoomLevel, min: _minZoomLevel, max: _maxZoomLevel,
+                        value: _currentZoomLevel,
+                        min: _minZoomLevel,
+                        max: _maxZoomLevel,
                         onChanged: (value) async {
                           if (_controller == null) return;
                           setState(() => _currentZoomLevel = value);
@@ -269,11 +283,17 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                     const Icon(Icons.timer_outlined, color: Colors.white),
                     Expanded(
                       child: Slider(
-                        value: _timerSeconds, min: 0, max: 60, divisions: 60, label: '${_timerSeconds.toInt()}s',
-                        onChanged: (value) => setState(() => _timerSeconds = value),
+                        value: _timerSeconds,
+                        min: 0,
+                        max: 60,
+                        divisions: 60,
+                        label: '${_timerSeconds.toInt()}s',
+                        onChanged: (value) =>
+                            setState(() => _timerSeconds = value),
                       ),
                     ),
-                    Text('${_timerSeconds.toInt()}s', style: const TextStyle(color: Colors.white)),
+                    Text('${_timerSeconds.toInt()}s',
+                        style: const TextStyle(color: Colors.white)),
                   ],
                 ),
               ),
@@ -283,23 +303,52 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 TextButton(
-                  onPressed: _isRecording ? null : () => setState(() => _isPhotoMode = true),
-                  child: Text('Photo', style: TextStyle(color: _isPhotoMode ? theme.colorScheme.primary : Colors.white, fontWeight: _isPhotoMode ? FontWeight.bold : FontWeight.normal)),
+                  onPressed: _isRecording
+                      ? null
+                      : () => setState(() => _isPhotoMode = true),
+                  child: Text('Photo',
+                      style: TextStyle(
+                          color: _isPhotoMode
+                              ? theme.colorScheme.primary
+                              : Colors.white,
+                          fontWeight: _isPhotoMode
+                              ? FontWeight.bold
+                              : FontWeight.normal)),
                 ),
                 GestureDetector(
-                  onTap: _isPhotoMode ? (_timerSeconds > 0 ? _toggleAutoCapture : _onTakePhotoPressed) : _onRecordButtonPressed,
+                  onTap: _isPhotoMode
+                      ? (_timerSeconds > 0
+                          ? _toggleAutoCapture
+                          : _onTakePhotoPressed)
+                      : _onRecordButtonPressed,
                   child: Container(
                     padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 2)),
+                    decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2)),
                     child: Icon(
-                      _isPhotoMode ? (_isAutoCapturing ? Icons.stop_circle_outlined : Icons.camera_alt) : (_isRecording ? Icons.stop : Icons.videocam),
-                      color: _isRecording ? Colors.red : Colors.white, size: 64,
+                      _isPhotoMode
+                          ? (_isAutoCapturing
+                              ? Icons.stop_circle_outlined
+                              : Icons.camera_alt)
+                          : (_isRecording ? Icons.stop : Icons.videocam),
+                      color: _isRecording ? Colors.red : Colors.white,
+                      size: 64,
                     ),
                   ),
                 ),
                 TextButton(
-                  onPressed: _isRecording ? null : () => setState(() => _isPhotoMode = false),
-                  child: Text('Video', style: TextStyle(color: !_isPhotoMode ? theme.colorScheme.primary : Colors.white, fontWeight: !_isPhotoMode ? FontWeight.bold : FontWeight.normal)),
+                  onPressed: _isRecording
+                      ? null
+                      : () => setState(() => _isPhotoMode = false),
+                  child: Text('Video',
+                      style: TextStyle(
+                          color: !_isPhotoMode
+                              ? theme.colorScheme.primary
+                              : Colors.white,
+                          fontWeight: !_isPhotoMode
+                              ? FontWeight.bold
+                              : FontWeight.normal)),
                 ),
               ],
             ),

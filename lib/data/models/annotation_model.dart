@@ -8,7 +8,8 @@ class Annotation {
   factory Annotation.fromJson(Map<String, dynamic> json) {
     return Annotation(
       boxes: (json['boxes'] as List<dynamic>)
-          .map((boxJson) => BoundingBox.fromJson(boxJson as Map<String, dynamic>))
+          .map((boxJson) =>
+              BoundingBox.fromJson(boxJson as Map<String, dynamic>))
           .toList(),
     );
   }

@@ -30,7 +30,8 @@ class ProjectService {
     await _prefs.setString(projectsKey, jsonEncode(jsonList));
   }
 
-  Future<void> saveLabels(String projectPath, Map<String, String> labels) async {
+  Future<void> saveLabels(
+      String projectPath, Map<String, String> labels) async {
     try {
       final filePath = p.join(projectPath, 'labels.json');
       final file = File(filePath);

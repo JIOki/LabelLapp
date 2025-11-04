@@ -10,7 +10,7 @@ void main() async {
 
   try {
     final projectService = await ProjectService.create();
-    
+
     // DEFINITIVE FIX: Wrap the app in a MultiProvider to handle all providers.
     runApp(MultiProvider(
       providers: [
@@ -19,7 +19,6 @@ void main() async {
       ],
       child: const MyApp(),
     ));
-
   } catch (e) {
     runApp(ErrorApp(error: e));
   }

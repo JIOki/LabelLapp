@@ -27,38 +27,32 @@ BBox Annotator is a Flutter-based mobile tool for creating image annotation data
 
 ---
 
-## Current Feature: Camera Capture Module
+## Current Feature: Horizontal Annotation Interface
 
-This section details the plan and implementation of the recently added camera capture functionality, designed to make data acquisition faster and more direct.
+This section details the plan and implementation of the redesigned annotation screen, which is now optimized for a horizontal (landscape) layout to enhance user experience.
 
 ### Objective
 
-To integrate a new, independent module that allows users to capture images and videos directly from the device's camera into an active project, complete with advanced controls for a better capture experience.
+To improve the usability of the `AnnotationScreen` by forcing a landscape orientation. This maximizes the image viewing area, reduces wasted space, and provides a more ergonomic layout for annotating images.
 
 ### Implementation Plan & Features
 
-1.  **Dependencies Added:**
-    *   `camera`: The core package for controlling the device camera hardware.
-    *   `wakelock`: To prevent the screen from sleeping during capture sessions.
-    *   `permission_handler`: To robustly request and manage camera and microphone permissions.
+1.  **Forced Landscape Orientation:**
+    *   The `AnnotationScreen` now automatically forces the device into landscape mode upon entry using `SystemChrome.setPreferredOrientations`.
+    *   The orientation is reset to the user's preferred settings when the screen is closed, ensuring no impact on the rest of the application.
 
-2.  **Modified Entry Point:**
-    *   The "Add Images" `FloatingActionButton` on the `ProjectScreen` was updated.
-    *   It now opens a `showModalBottomSheet` presenting three clear options: "From Files", "From Folder", and the new "Use Camera".
+2.  **Redesigned Horizontal Layout:**
+    *   The screen's layout has been fundamentally changed from a vertical `Column` to a horizontal `Row`.
+    *   **Image Viewer (Expanded):** The main area is now an expanded `PageView` that displays the image, making full use of the horizontal space.
+    *   **Side Control Panel:** A new, fixed-width panel has been added to the right side of the screen to house all interactive controls.
 
-3.  **Independent Camera Module (`lib/ui/screens/camera/camera_screen.dart`):
-    *   **Self-Contained:** All camera logic is encapsulated within this new screen to avoid altering existing code.
-    *   **Permission Handling:** The screen first requests camera and microphone permissions. If denied, it shows an informative message with a shortcut to the app's settings.
-    *   **Screen Lock:** `Wakelock` is enabled when the screen is active and disabled when it's closed to ensure uninterrupted use.
-    *   **Dual Mode:** Users can switch between a "Photo" mode and a "Video" mode.
-    *   **Advanced Controls (Photo Mode):**
-        *   **Zoom:** A slider allows for smooth control of the camera's zoom level.
-        *   **Timer:** A slider sets an interval (in seconds) for automatic, periodic photo capture.
-    *   **Capture & Recording:**
-        *   A central button handles all actions: take a photo, start/stop auto-capture, or start/stop video recording.
-    *   **File Organization:**
-        *   Captured **images** are saved directly to the project's `images/` folder.
-        *   Recorded **videos** are saved to a new `videos/` folder within the project, which is created if it doesn't exist.
+3.  **Ergonomic Control Panel:**
+    *   All annotation controls have been consolidated into the new side panel for easy access:
+        *   **Top Bar:** Contains the 'Back' button, the current image name, and the 'Save' button.
+        *   **Image Navigation:** Explicit 'Previous' (`<`) and 'Next' (`>`) buttons have been added for clear, easy navigation between images, complementing the existing swipe gesture.
+        *   **Class Selector:** The list of class `ChoiceChip`s is now vertically scrollable within the panel.
+        *   **Annotation Actions:** 'Undo' and 'Redo' buttons are placed at the bottom of the panel.
 
-4.  **Seamless Integration:**
-    *   Upon closing the camera screen, a callback is triggered that automatically refreshes the `ProjectScreen`, making newly captured images immediately visible in the project's image grid.
+4.  **Seamless Functionality:**
+    *   The core logic for drawing, saving, auto-saving on swipe/navigation, and state management remains intact.
+    *   The new layout is fully responsive and provides a more intuitive and efficient annotation workflow.

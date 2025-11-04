@@ -6,8 +6,16 @@ import '../../../data/models/bounding_box_model.dart';
 
 // Constants
 const List<Color> _kPredefinedColors = [
-  Colors.red, Colors.green, Colors.blue, Colors.purple, Colors.orange,
-  Colors.cyan, Colors.pink, Colors.amber, Colors.indigo, Colors.lime,
+  Colors.red,
+  Colors.green,
+  Colors.blue,
+  Colors.purple,
+  Colors.orange,
+  Colors.cyan,
+  Colors.pink,
+  Colors.amber,
+  Colors.indigo,
+  Colors.lime,
 ];
 const double _kHandleSize = 12.0;
 const double _kMinBoxSize = 4.0;
@@ -16,6 +24,7 @@ const double _kDeleteIconSize = 28.0;
 
 // Enums for interaction state
 enum _InteractionType { none, drawing, moving, resizing }
+
 enum _ResizeHandle { topLeft, topRight, bottomLeft, bottomRight }
 
 // Painter for the static background image (for performance)
@@ -26,9 +35,11 @@ class _ImagePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final imageSize = Size(image.width.toDouble(), image.height.toDouble());
-    final scale = min(size.width / imageSize.width, size.height / imageSize.height);
+    final scale =
+        min(size.width / imageSize.width, size.height / imageSize.height);
     final scaledImageSize = imageSize * scale;
-    final offset = Offset((size.width - scaledImageSize.width) / 2, (size.height - scaledImageSize.height) / 2);
+    final offset = Offset((size.width - scaledImageSize.width) / 2,
+        (size.height - scaledImageSize.height) / 2);
 
     canvas.save();
     canvas.translate(offset.dx, offset.dy);
@@ -70,7 +81,8 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   _ResizeHandle? _activeHandle;
   Offset? _dragStart;
   Rect? _initialBoxRect;
-  List<BoundingBox>? _preDragBoxes; // State before a drag starts, for commit logic
+  List<BoundingBox>?
+      _preDragBoxes; // State before a drag starts, for commit logic
   int? _selectedBoxIndex;
   BoundingBox? _currentDrawingBox;
 
@@ -87,7 +99,8 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   void didUpdateWidget(covariant DrawingCanvas oldWidget) {
     super.didUpdateWidget(oldWidget);
     // If project classes change, re-assign colors
-    if (!const DeepCollectionEquality().equals(widget.projectClasses, oldWidget.projectClasses)) {
+    if (!const DeepCollectionEquality()
+        .equals(widget.projectClasses, oldWidget.projectClasses)) {
       _assignClassColors();
     }
   }
@@ -95,31 +108,37 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   void _assignClassColors() {
     _classColors.clear();
     for (int i = 0; i < widget.projectClasses.length; i++) {
-      _classColors[widget.projectClasses[i]] = _kPredefinedColors[i % _kPredefinedColors.length];
+      _classColors[widget.projectClasses[i]] =
+          _kPredefinedColors[i % _kPredefinedColors.length];
     }
   }
-  
+
   // --- Coordinate Transformation ---
   Offset _toImageCoordinates(Offset localPosition) {
     if (_canvasKey.currentContext == null) return Offset.zero;
-    final RenderBox canvasBox = _canvasKey.currentContext!.findRenderObject() as RenderBox;
+    final RenderBox canvasBox =
+        _canvasKey.currentContext!.findRenderObject() as RenderBox;
     final canvasSize = canvasBox.size;
-    final imageSize = Size(widget.image.width.toDouble(), widget.image.height.toDouble());
+    final imageSize =
+        Size(widget.image.width.toDouble(), widget.image.height.toDouble());
 
-    final scale = min(canvasSize.width / imageSize.width, canvasSize.height / imageSize.height);
+    final scale = min(canvasSize.width / imageSize.width,
+        canvasSize.height / imageSize.height);
     final scaledImageSize = imageSize * scale;
-    
+
     final offsetX = (canvasSize.width - scaledImageSize.width) / 2;
     final offsetY = (canvasSize.height - scaledImageSize.height) / 2;
 
     final imageX = (localPosition.dx - offsetX) / scale;
     final imageY = (localPosition.dy - offsetY) / scale;
 
-    return Offset(imageX.clamp(0.0, imageSize.width), imageY.clamp(0.0, imageSize.height));
+    return Offset(imageX.clamp(0.0, imageSize.width),
+        imageY.clamp(0.0, imageSize.height));
   }
 
   Rect _clampRectToImage(Rect rect) {
-    final imageBounds = Rect.fromLTWH(0, 0, widget.image.width.toDouble(), widget.image.height.toDouble());
+    final imageBounds = Rect.fromLTWH(
+        0, 0, widget.image.width.toDouble(), widget.image.height.toDouble());
     return Rect.fromLTRB(
       rect.left.clamp(imageBounds.left, imageBounds.right),
       rect.top.clamp(imageBounds.top, imageBounds.bottom),
@@ -129,20 +148,39 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   }
 
   // --- Hit Testing ---
-  _ResizeHandle? _hitTestHandles(Offset position, Rect boxRect, double handleSize) {
-    if (Rect.fromCenter(center: boxRect.topLeft, width: handleSize, height: handleSize).contains(position)) return _ResizeHandle.topLeft;
-    if (Rect.fromCenter(center: boxRect.topRight, width: handleSize, height: handleSize).contains(position)) return _ResizeHandle.topRight;
-    if (Rect.fromCenter(center: boxRect.bottomLeft, width: handleSize, height: handleSize).contains(position)) return _ResizeHandle.bottomLeft;
-    if (Rect.fromCenter(center: boxRect.bottomRight, width: handleSize, height: handleSize).contains(position)) return _ResizeHandle.bottomRight;
+  _ResizeHandle? _hitTestHandles(
+      Offset position, Rect boxRect, double handleSize) {
+    if (Rect.fromCenter(
+            center: boxRect.topLeft, width: handleSize, height: handleSize)
+        .contains(position)) {
+      return _ResizeHandle.topLeft;
+    }
+    if (Rect.fromCenter(
+            center: boxRect.topRight, width: handleSize, height: handleSize)
+        .contains(position)) {
+      return _ResizeHandle.topRight;
+    }
+    if (Rect.fromCenter(
+            center: boxRect.bottomLeft, width: handleSize, height: handleSize)
+        .contains(position)) {
+      return _ResizeHandle.bottomLeft;
+    }
+    if (Rect.fromCenter(
+            center: boxRect.bottomRight, width: handleSize, height: handleSize)
+        .contains(position)) {
+      return _ResizeHandle.bottomRight;
+    }
     return null;
   }
-  
+
   // --- Gesture Handlers ---
   void _onPanStart(DragStartDetails details) {
     final imageCoords = _toImageCoordinates(details.localPosition);
     _dragStart = imageCoords;
-    _preDragBoxes = widget.boxes.map((box) => box.copyWith()).toList(); // Save pre-drag state
-    
+    _preDragBoxes = widget.boxes
+        .map((box) => box.copyWith())
+        .toList(); // Save pre-drag state
+
     // Check for resizing first
     if (_selectedBoxIndex != null) {
       final selectedBox = widget.boxes[_selectedBoxIndex!];
@@ -155,7 +193,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
         return;
       }
     }
-    
+
     // Check for moving an existing box (start from top-most box)
     for (int i = widget.boxes.length - 1; i >= 0; i--) {
       if (widget.boxes[i].toRect().contains(imageCoords)) {
@@ -185,40 +223,53 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     switch (_interaction) {
       case _InteractionType.drawing:
         setState(() {
-          _currentDrawingBox = BoundingBox.fromRect(Rect.fromPoints(_dragStart!, imageCoords), widget.selectedClass!);
+          _currentDrawingBox = BoundingBox.fromRect(
+              Rect.fromPoints(_dragStart!, imageCoords), widget.selectedClass!);
         });
         break;
-        
+
       case _InteractionType.moving:
-        if (_selectedBoxIndex != null && _initialBoxRect != null && _dragStart != null) {
+        if (_selectedBoxIndex != null &&
+            _initialBoxRect != null &&
+            _dragStart != null) {
           final dx = imageCoords.dx - _dragStart!.dx;
           final dy = imageCoords.dy - _dragStart!.dy;
           final newRect = _initialBoxRect!.translate(dx, dy);
           newBoxes[_selectedBoxIndex!] = BoundingBox.fromRect(
-            _clampRectToImage(newRect), 
-            newBoxes[_selectedBoxIndex!].label
-          );
+              _clampRectToImage(newRect), newBoxes[_selectedBoxIndex!].label);
           widget.onUpdate(newBoxes); // Live update
         }
         break;
-        
+
       case _InteractionType.resizing:
-        if (_selectedBoxIndex != null && _initialBoxRect != null && _activeHandle != null) {
+        if (_selectedBoxIndex != null &&
+            _initialBoxRect != null &&
+            _activeHandle != null) {
           Rect newRect;
           switch (_activeHandle!) {
-            case _ResizeHandle.topLeft: newRect = Rect.fromPoints(imageCoords, _initialBoxRect!.bottomRight); break;
-            case _ResizeHandle.topRight: newRect = Rect.fromLTRB(_initialBoxRect!.left, imageCoords.dy, imageCoords.dx, _initialBoxRect!.bottom); break;
-            case _ResizeHandle.bottomLeft: newRect = Rect.fromLTRB(imageCoords.dx, _initialBoxRect!.top, _initialBoxRect!.right, imageCoords.dy); break;
-            case _ResizeHandle.bottomRight: newRect = Rect.fromPoints(_initialBoxRect!.topLeft, imageCoords); break;
+            case _ResizeHandle.topLeft:
+              newRect =
+                  Rect.fromPoints(imageCoords, _initialBoxRect!.bottomRight);
+              break;
+            case _ResizeHandle.topRight:
+              newRect = Rect.fromLTRB(_initialBoxRect!.left, imageCoords.dy,
+                  imageCoords.dx, _initialBoxRect!.bottom);
+              break;
+            case _ResizeHandle.bottomLeft:
+              newRect = Rect.fromLTRB(imageCoords.dx, _initialBoxRect!.top,
+                  _initialBoxRect!.right, imageCoords.dy);
+              break;
+            case _ResizeHandle.bottomRight:
+              newRect = Rect.fromPoints(_initialBoxRect!.topLeft, imageCoords);
+              break;
           }
           newBoxes[_selectedBoxIndex!] = BoundingBox.fromRect(
-            _clampRectToImage(newRect.normalize()), 
-            newBoxes[_selectedBoxIndex!].label
-          );
+              _clampRectToImage(newRect.normalize()),
+              newBoxes[_selectedBoxIndex!].label);
           widget.onUpdate(newBoxes); // Live update
         }
         break;
-        
+
       case _InteractionType.none:
         break;
     }
@@ -228,24 +279,27 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     var finalBoxes = widget.boxes.map((b) => b.copyWith()).toList();
     bool hasChanged = false;
 
-    if (_interaction == _InteractionType.drawing && _currentDrawingBox != null) {
-      final finalRect = _clampRectToImage(_currentDrawingBox!.toRect().normalize());
+    if (_interaction == _InteractionType.drawing &&
+        _currentDrawingBox != null) {
+      final finalRect =
+          _clampRectToImage(_currentDrawingBox!.toRect().normalize());
       if (finalRect.width > _kMinBoxSize && finalRect.height > _kMinBoxSize) {
         finalBoxes.add(BoundingBox.fromRect(finalRect, widget.selectedClass!));
         hasChanged = true;
       }
-    } else if ((_interaction == _InteractionType.moving || _interaction == _InteractionType.resizing)) {
-       // Compare with the state before the drag started
+    } else if ((_interaction == _InteractionType.moving ||
+        _interaction == _InteractionType.resizing)) {
+      // Compare with the state before the drag started
       if (!const DeepCollectionEquality().equals(widget.boxes, _preDragBoxes)) {
-          hasChanged = true;
+        hasChanged = true;
       }
     }
-    
+
     // Only commit to history if a meaningful change occurred
-    if(hasChanged) {
+    if (hasChanged) {
       widget.onCommit(finalBoxes);
     }
-    
+
     // Reset interaction state
     setState(() {
       _interaction = _InteractionType.none;
@@ -263,16 +317,23 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     // Check for delete icon tap first
     if (_selectedBoxIndex != null) {
       final selectedBox = widget.boxes[_selectedBoxIndex!];
-      final iconCenter = selectedBox.toRect().topRight + const Offset(_kDeleteIconSize / 4, -_kDeleteIconSize / 4);
-      final deleteRect = Rect.fromCenter(center: iconCenter, width: _kDeleteIconSize, height: _kDeleteIconSize);
+      final iconCenter = selectedBox.toRect().topRight +
+          const Offset(_kDeleteIconSize / 4, -_kDeleteIconSize / 4);
+      final deleteRect = Rect.fromCenter(
+          center: iconCenter,
+          width: _kDeleteIconSize,
+          height: _kDeleteIconSize);
       if (deleteRect.contains(imageCoords)) {
-        var updatedBoxes = List<BoundingBox>.from(widget.boxes)..removeAt(_selectedBoxIndex!);
-        setState(() { _selectedBoxIndex = null; });
+        var updatedBoxes = List<BoundingBox>.from(widget.boxes)
+          ..removeAt(_selectedBoxIndex!);
+        setState(() {
+          _selectedBoxIndex = null;
+        });
         widget.onCommit(updatedBoxes); // Commit deletion
         return;
       }
     }
-    
+
     // Check for selecting a box
     for (int i = widget.boxes.length - 1; i >= 0; i--) {
       if (widget.boxes[i].toRect().contains(imageCoords)) {
@@ -286,7 +347,9 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
 
     // If tap is outside any box, deselect
     if (_selectedBoxIndex != null) {
-      setState(() { _selectedBoxIndex = null; });
+      setState(() {
+        _selectedBoxIndex = null;
+      });
     }
   }
 
@@ -345,8 +408,10 @@ class _AnnotationPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     // --- Setup coordinate system ---
     final imageSize = Size(image.width.toDouble(), image.height.toDouble());
-    final scale = min(size.width / imageSize.width, size.height / imageSize.height);
-    final offset = Offset((size.width - imageSize.width * scale) / 2, (size.height - imageSize.height * scale) / 2);
+    final scale =
+        min(size.width / imageSize.width, size.height / imageSize.height);
+    final offset = Offset((size.width - imageSize.width * scale) / 2,
+        (size.height - imageSize.height * scale) / 2);
     canvas.save();
     canvas.translate(offset.dx, offset.dy);
     canvas.scale(scale);
@@ -360,7 +425,7 @@ class _AnnotationPainter extends CustomPainter {
         ..color = isSelected ? Colors.yellowAccent : color
         ..style = PaintingStyle.stroke
         ..strokeWidth = (isSelected ? 4.0 : 3.0) / scale;
-      
+
       final rect = box.toRect();
       canvas.drawRect(rect, paint);
       _drawLabel(canvas, rect, box.label, color, scale);
@@ -379,49 +444,60 @@ class _AnnotationPainter extends CustomPainter {
         ..strokeWidth = 3.0 / scale;
       canvas.drawRect(currentBox!.toRect().normalize(), paint);
     }
-    
+
     canvas.restore();
   }
 
-  void _drawLabel(Canvas canvas, Rect rect, String text, Color color, double scale) {
+  void _drawLabel(
+      Canvas canvas, Rect rect, String text, Color color, double scale) {
     final textPainter = TextPainter(
       text: TextSpan(
         text: text,
         style: TextStyle(
-          color: Colors.white,
-          fontSize: _kLabelFontSize / scale,
-          fontWeight: FontWeight.bold,
-          shadows: const [Shadow(color: Colors.black54, blurRadius: 4.0)]
-        ),
+            color: Colors.white,
+            fontSize: _kLabelFontSize / scale,
+            fontWeight: FontWeight.bold,
+            shadows: const [Shadow(color: Colors.black54, blurRadius: 4.0)]),
       ),
       textDirection: TextDirection.ltr,
     )..layout();
-    
+
     final padding = 5.0 / scale;
     final labelHeight = textPainter.height + padding;
     final labelWidth = textPainter.width + padding * 2;
-    final labelRect = Rect.fromLTWH(rect.left, rect.top - labelHeight, labelWidth, labelHeight);
-    final rrect = RRect.fromRectAndRadius(labelRect, Radius.circular(labelHeight / 2));
+    final labelRect = Rect.fromLTWH(
+        rect.left, rect.top - labelHeight, labelWidth, labelHeight);
+    final rrect =
+        RRect.fromRectAndRadius(labelRect, Radius.circular(labelHeight / 2));
 
     canvas.drawRRect(rrect, Paint()..color = color);
-    textPainter.paint(canvas, Offset(labelRect.left + padding, labelRect.top + padding / 2));
+    textPainter.paint(
+        canvas, Offset(labelRect.left + padding, labelRect.top + padding / 2));
   }
 
   void _drawHandles(Canvas canvas, Rect rect, double scale) {
     final handlePaint = Paint()..color = Colors.yellowAccent;
     final handleSize = _kHandleSize / scale;
-    final handleRect = Rect.fromLTWH(-handleSize / 2, -handleSize / 2, handleSize, handleSize);
+    final handleRect =
+        Rect.fromLTWH(-handleSize / 2, -handleSize / 2, handleSize, handleSize);
 
-    canvas.drawRect(handleRect.translate(rect.topLeft.dx, rect.topLeft.dy), handlePaint);
-    canvas.drawRect(handleRect.translate(rect.topRight.dx, rect.topRight.dy), handlePaint);
-    canvas.drawRect(handleRect.translate(rect.bottomLeft.dx, rect.bottomLeft.dy), handlePaint);
-    canvas.drawRect(handleRect.translate(rect.bottomRight.dx, rect.bottomRight.dy), handlePaint);
+    canvas.drawRect(
+        handleRect.translate(rect.topLeft.dx, rect.topLeft.dy), handlePaint);
+    canvas.drawRect(
+        handleRect.translate(rect.topRight.dx, rect.topRight.dy), handlePaint);
+    canvas.drawRect(
+        handleRect.translate(rect.bottomLeft.dx, rect.bottomLeft.dy),
+        handlePaint);
+    canvas.drawRect(
+        handleRect.translate(rect.bottomRight.dx, rect.bottomRight.dy),
+        handlePaint);
   }
 
   void _drawDeleteIcon(Canvas canvas, Rect rect, double scale) {
     final iconSize = _kDeleteIconSize / scale;
     final deleteCenter = rect.topRight + Offset(iconSize / 4, -iconSize / 4);
-    final deleteRect = Rect.fromCenter(center: deleteCenter, width: iconSize, height: iconSize);
+    final deleteRect = Rect.fromCenter(
+        center: deleteCenter, width: iconSize, height: iconSize);
 
     final iconPainter = TextPainter(
       text: TextSpan(
@@ -449,6 +525,7 @@ class _AnnotationPainter extends CustomPainter {
 
 extension on Rect {
   Rect normalize() {
-    return Rect.fromLTRB(min(left, right), min(top, bottom), max(left, right), max(top, bottom));
+    return Rect.fromLTRB(
+        min(left, right), min(top, bottom), max(left, right), max(top, bottom));
   }
 }

@@ -21,7 +21,8 @@ void main() {
   late MockProjectService mockProjectService;
 
   setUpAll(() {
-    const MethodChannel channel = MethodChannel('flutter.baseflow.com/permissions/methods');
+    const MethodChannel channel =
+        MethodChannel('flutter.baseflow.com/permissions/methods');
 
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (MethodCall methodCall) async {
@@ -59,7 +60,8 @@ void main() {
       Provider<ProjectService>.value(
         value: mockProjectService,
         child: MaterialApp(
-          home: AnnotationScreen(images: images, project: project, initialIndex: 0),
+          home: AnnotationScreen(
+              images: images, project: project, initialIndex: 0),
         ),
       ),
     );
@@ -68,15 +70,15 @@ void main() {
     // Act: Use tester.pageBack() to simulate popping the route.
     // This correctly triggers the WillPopScope.
     await tester.pageBack();
-    
+
     // DEFINITIVE FIX: Removed the unnecessary pumpAndSettle that was causing a timeout.
     // The await on pageBack is sufficient.
 
     // Assert: Verify save was called.
     verify(mockProjectService.saveLabelForImage(
-      projectPath: project.projectPath,
-      imageName: images[0].name,
-      yoloString: ''
-    )).called(1);
+            projectPath: project.projectPath,
+            imageName: images[0].name,
+            yoloString: ''))
+        .called(1);
   });
 }

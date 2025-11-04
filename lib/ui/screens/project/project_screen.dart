@@ -54,7 +54,8 @@ class _ProjectScreenState extends State<ProjectScreen> {
           final bytes = await file.readAsBytes();
           final imageName = p.basename(file.path);
           final annotation = await _loadAnnotationForImage(imageName, bytes);
-          images.add(ProjectImage(name: imageName, bytes: bytes, annotation: annotation));
+          images.add(ProjectImage(
+              name: imageName, bytes: bytes, annotation: annotation));
         }
         if (mounted) {
           setState(() {
@@ -68,8 +69,10 @@ class _ProjectScreenState extends State<ProjectScreen> {
     }
   }
 
-  Future<Annotation> _loadAnnotationForImage(String imageName, Uint8List bytes) async {
-    final labelPath = p.join(_project.projectPath, 'labels', '${p.basenameWithoutExtension(imageName)}.txt');
+  Future<Annotation> _loadAnnotationForImage(
+      String imageName, Uint8List bytes) async {
+    final labelPath = p.join(_project.projectPath, 'labels',
+        '${p.basenameWithoutExtension(imageName)}.txt');
     final labelFile = File(labelPath);
 
     if (await labelFile.exists()) {
@@ -77,31 +80,38 @@ class _ProjectScreenState extends State<ProjectScreen> {
       final image = img.decodeImage(bytes);
       if (image == null) return Annotation();
 
-      final boxes = lines.map((line) {
-        final parts = line.split(' ');
-        if (parts.length != 5) return null;
+      final boxes = lines
+          .map((line) {
+            final parts = line.split(' ');
+            if (parts.length != 5) return null;
 
-        try {
-          final classIndex = int.parse(parts[0]);
-          final centerX = double.parse(parts[1]);
-          final centerY = double.parse(parts[2]);
-          final width = double.parse(parts[3]);
-          final height = double.parse(parts[4]);
+            try {
+              final classIndex = int.parse(parts[0]);
+              final centerX = double.parse(parts[1]);
+              final centerY = double.parse(parts[2]);
+              final width = double.parse(parts[3]);
+              final height = double.parse(parts[4]);
 
-          if (classIndex < 0 || classIndex >= _project.classes.length) return null;
+              if (classIndex < 0 || classIndex >= _project.classes.length) {
+                return null;
+              }
 
-          return BoundingBox(
-            label: _project.classes[classIndex],
-            left: (centerX - width / 2) * image.width,
-            top: (centerY - height / 2) * image.height,
-            right: (centerX + width / 2) * image.width,
-            bottom: (centerY + height / 2) * image.height,
-          );
-        } catch (e) {
-          if (kDebugMode) print('Error parsing bounding box for $imageName: $e');
-          return null;
-        }
-      }).whereType<BoundingBox>().toList();
+              return BoundingBox(
+                label: _project.classes[classIndex],
+                left: (centerX - width / 2) * image.width,
+                top: (centerY - height / 2) * image.height,
+                right: (centerX + width / 2) * image.width,
+                bottom: (centerY + height / 2) * image.height,
+              );
+            } catch (e) {
+              if (kDebugMode) {
+                print('Error parsing bounding box for $imageName: $e');
+              }
+              return null;
+            }
+          })
+          .whereType<BoundingBox>()
+          .toList();
 
       return Annotation(boxes: boxes);
     }
@@ -136,11 +146,13 @@ class _ProjectScreenState extends State<ProjectScreen> {
                 leading: const Icon(Icons.camera_alt_outlined),
                 title: const Text('Use Camera'),
                 onTap: () async {
-                   Navigator.pop(context);
+                  Navigator.pop(context);
                   await Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => CameraScreen(project: _project, onPopped: _loadImagesFromProjectDir),
+                      builder: (context) => CameraScreen(
+                          project: _project,
+                          onPopped: _loadImagesFromProjectDir),
                     ),
                   );
                 },
@@ -153,8 +165,8 @@ class _ProjectScreenState extends State<ProjectScreen> {
   }
 
   Future<void> _pickImageFiles() async {
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: true, type: FileType.image, withData: true);
+    final result = await FilePicker.platform
+        .pickFiles(allowMultiple: true, type: FileType.image, withData: true);
     if (result != null) await _processPlatformFiles(result.files);
   }
 
@@ -171,12 +183,16 @@ class _ProjectScreenState extends State<ProjectScreen> {
   }
 
   Future<void> _processPlatformFiles(List<PlatformFile> files) async {
-    final imagesData = files.map((f) => {'name': f.name, 'bytes': f.bytes}).where((d) => d['bytes'] != null).toList();
+    final imagesData = files
+        .map((f) => {'name': f.name, 'bytes': f.bytes})
+        .where((d) => d['bytes'] != null)
+        .toList();
     await _processImages(imagesData.cast<Map<String, dynamic>>().toList());
   }
 
   Future<void> _processIoFiles(List<File> files) async {
-    final imageFutures = files.map((f) async => {'name': p.basename(f.path), 'bytes': await f.readAsBytes()});
+    final imageFutures = files.map((f) async =>
+        {'name': p.basename(f.path), 'bytes': await f.readAsBytes()});
     final imagesData = await Future.wait(imageFutures);
     await _processImages(imagesData);
   }
@@ -196,12 +212,15 @@ class _ProjectScreenState extends State<ProjectScreen> {
         if (image != null) {
           final resized = img.copyResize(image, width: 640);
           final resizedBytes = Uint8List.fromList(img.encodeJpg(resized));
-          final newImage = ProjectImage(name: data['name'], bytes: resizedBytes, annotation: Annotation());
+          final newImage = ProjectImage(
+              name: data['name'],
+              bytes: resizedBytes,
+              annotation: Annotation());
           newImages.add(newImage);
           await _saveImage(newImage);
         }
       } catch (e) {
-        if(kDebugMode) print("Error processing ${imagesData[i]['name']}: $e");
+        if (kDebugMode) print("Error processing ${imagesData[i]['name']}: $e");
       }
       _progressNotifier.value = i + 1;
     }
@@ -216,13 +235,13 @@ class _ProjectScreenState extends State<ProjectScreen> {
     final imagePath = p.join(_project.projectPath, 'images', image.name);
     await File(imagePath).writeAsBytes(image.bytes);
   }
-  
+
   Future<void> _openEditClassesDialog() async {
     if (!mounted) return;
     final updatedClasses = await showDialog<List<String>>(
-      context: context, 
-      builder: (context) => EditProjectDialog(initialClasses: _project.classes)
-    );
+        context: context,
+        builder: (context) =>
+            EditProjectDialog(initialClasses: _project.classes));
     if (updatedClasses != null && mounted) {
       setState(() => _project = _project.copyWith(classes: updatedClasses));
     }
@@ -230,10 +249,11 @@ class _ProjectScreenState extends State<ProjectScreen> {
 
   Future<void> _exportProject() async {
     if (_images.isEmpty || !mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No images to export.')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('No images to export.')));
       return;
     }
-    
+
     _showProgressDialog('Exporting Project');
 
     try {
@@ -242,25 +262,32 @@ class _ProjectScreenState extends State<ProjectScreen> {
       final encoder = ZipFileEncoder()..create(archivePath);
 
       for (final image in _images) {
-        final labelPath = p.join(_project.projectPath, 'labels', '${p.basenameWithoutExtension(image.name)}.txt');
+        final labelPath = p.join(_project.projectPath, 'labels',
+            '${p.basenameWithoutExtension(image.name)}.txt');
         final labelFile = File(labelPath);
         if (await labelFile.exists()) {
-          encoder.addFile(labelFile, p.join('labels', p.basename(labelFile.path)));
+          encoder.addFile(
+              labelFile, p.join('labels', p.basename(labelFile.path)));
         }
-        encoder.addArchiveFile(ArchiveFile('images/${image.name}', image.bytes.length, image.bytes));
+        encoder.addArchiveFile(ArchiveFile(
+            'images/${image.name}', image.bytes.length, image.bytes));
       }
-      
-      final classesContent = Uint8List.fromList(_project.classes.join('\n').codeUnits);
-      encoder.addArchiveFile(ArchiveFile('classes.txt', classesContent.length, classesContent));
-      encoder.close();
-      
-      if (mounted) Navigator.of(context, rootNavigator: true).pop();
-      await Share.shareXFiles([XFile(archivePath)], text: 'LabelLab Project: ${_project.name}');
 
+      final classesContent =
+          Uint8List.fromList(_project.classes.join('\n').codeUnits);
+      encoder.addArchiveFile(
+          ArchiveFile('classes.txt', classesContent.length, classesContent));
+      encoder.close();
+
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+      // ignore: deprecated_member_use
+      await Share.shareXFiles([XFile(archivePath)],
+          text: 'LabelLab Project: ${_project.name}');
     } catch (e) {
       if (mounted) {
-         Navigator.of(context, rootNavigator: true).pop();
-         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error exporting: $e')));
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error exporting: $e')));
       }
     }
   }
@@ -271,7 +298,10 @@ class _ProjectScreenState extends State<ProjectScreen> {
       body: Stack(
         children: [
           Positioned.fill(
-            child: Opacity(opacity: 0.05, child: Image.asset('assets/images/noise.png', repeat: ImageRepeat.repeat, fit: BoxFit.cover)),
+            child: Opacity(
+                opacity: 0.05,
+                child: Image.asset('assets/images/noise.png',
+                    repeat: ImageRepeat.repeat, fit: BoxFit.cover)),
           ),
           SafeArea(
             child: Column(
@@ -280,7 +310,8 @@ class _ProjectScreenState extends State<ProjectScreen> {
                 _buildAppBar(Theme.of(context)),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Text('Project Images', style: Theme.of(context).textTheme.titleLarge),
+                  child: Text('Project Images',
+                      style: Theme.of(context).textTheme.titleLarge),
                 ),
                 const SizedBox(height: 16),
                 Expanded(child: _buildImageGrid()),
@@ -297,16 +328,21 @@ class _ProjectScreenState extends State<ProjectScreen> {
       ),
     );
   }
-  
+
   Widget _buildAppBar(ThemeData theme) {
     return Padding(
       padding: const EdgeInsets.all(8.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.of(context).pop()),
+          IconButton(
+              icon: const Icon(Icons.arrow_back),
+              onPressed: () => Navigator.of(context).pop()),
           Expanded(
-            child: Text(_project.name, style: theme.textTheme.headlineSmall, textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),
+            child: Text(_project.name,
+                style: theme.textTheme.headlineSmall,
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis),
           ),
           PopupMenuButton<String>(
             onSelected: (value) {
@@ -314,8 +350,16 @@ class _ProjectScreenState extends State<ProjectScreen> {
               if (value == 'export') _exportProject();
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Edit Classes'))),
-              const PopupMenuItem(value: 'export', child: ListTile(leading: Icon(Icons.archive_outlined), title: Text('Export Project'))),
+              const PopupMenuItem(
+                  value: 'edit',
+                  child: ListTile(
+                      leading: Icon(Icons.edit_outlined),
+                      title: Text('Edit Classes'))),
+              const PopupMenuItem(
+                  value: 'export',
+                  child: ListTile(
+                      leading: Icon(Icons.archive_outlined),
+                      title: Text('Export Project'))),
             ],
           ),
         ],
@@ -325,12 +369,18 @@ class _ProjectScreenState extends State<ProjectScreen> {
 
   Widget _buildImageGrid() {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
-    if (_images.isEmpty) return const Center(child: Text('No images found. Add some to get started!'));
+    if (_images.isEmpty) {
+      return const Center(
+          child: Text('No images found. Add some to get started!'));
+    }
 
     return GridView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0).copyWith(bottom: 96.0),
+      padding:
+          const EdgeInsets.symmetric(horizontal: 16.0).copyWith(bottom: 96.0),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 200.0, crossAxisSpacing: 16.0, mainAxisSpacing: 16.0),
+          maxCrossAxisExtent: 200.0,
+          crossAxisSpacing: 16.0,
+          mainAxisSpacing: 16.0),
       itemCount: _images.length,
       itemBuilder: (context, index) {
         final image = _images[index];
@@ -374,7 +424,8 @@ class _ProjectScreenState extends State<ProjectScreen> {
         barrierDismissible: false,
         builder: (BuildContext context) {
           return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -388,7 +439,9 @@ class _ProjectScreenState extends State<ProjectScreen> {
                     return ValueListenableBuilder<int>(
                       valueListenable: _progressNotifier,
                       builder: (context, progress, child) {
-                         return total > 0 ? Text('$progress of $total') : const SizedBox.shrink();
+                        return total > 0
+                            ? Text('$progress of $total')
+                            : const SizedBox.shrink();
                       },
                     );
                   },

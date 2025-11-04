@@ -7,7 +7,8 @@ class ProjectCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
-  const ProjectCard({super.key, 
+  const ProjectCard({
+    super.key,
     required this.project,
     required this.onTap,
     required this.onDelete,
@@ -48,14 +49,16 @@ class ProjectCard extends StatelessWidget {
                   Icon(
                     Icons.folder_open_outlined,
                     size: 16,
-                    color: colorScheme.onSurfaceVariant, // Use a theme-based subtle color
+                    color: colorScheme
+                        .onSurfaceVariant, // Use a theme-based subtle color
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       project.projectPath,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant, // Consistent subtle color
+                        color: colorScheme
+                            .onSurfaceVariant, // Consistent subtle color
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),

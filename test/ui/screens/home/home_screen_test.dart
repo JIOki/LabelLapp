@@ -29,7 +29,8 @@ void main() {
   // DEFINITIVE FIX: Mock permission handler to avoid permission dialogs in tests.
   setUpAll(() {
     TestWidgetsFlutterBinding.ensureInitialized();
-    const MethodChannel channel = MethodChannel('flutter.baseflow.com/permissions/methods');
+    const MethodChannel channel =
+        MethodChannel('flutter.baseflow.com/permissions/methods');
 
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (MethodCall methodCall) async {
@@ -56,22 +57,26 @@ void main() {
       when(mockProjectService.saveProjects(any)).thenAnswer((_) async {});
     });
 
-    testWidgets('displays projects list when service returns data', (WidgetTester tester) async {
-      when(mockProjectService.getProjects()).thenAnswer((_) async => testProjects);
+    testWidgets('displays projects list when service returns data',
+        (WidgetTester tester) async {
+      when(mockProjectService.getProjects())
+          .thenAnswer((_) async => testProjects);
 
       await tester.pumpWidget(createTestableWidget(
         projectService: mockProjectService,
         child: const HomeScreen(),
       ));
-      
+
       await tester.pumpAndSettle();
 
       expect(find.text('Project Alpha'), findsOneWidget);
       expect(find.text('Project Beta'), findsOneWidget);
     });
 
-    testWidgets('filters projects when user types in search bar', (WidgetTester tester) async {
-      when(mockProjectService.getProjects()).thenAnswer((_) async => testProjects);
+    testWidgets('filters projects when user types in search bar',
+        (WidgetTester tester) async {
+      when(mockProjectService.getProjects())
+          .thenAnswer((_) async => testProjects);
 
       await tester.pumpWidget(createTestableWidget(
         projectService: mockProjectService,
@@ -86,7 +91,8 @@ void main() {
       expect(find.text('Project Beta'), findsNothing);
     });
 
-    testWidgets('shows NewProjectDialog when FloatingActionButton is tapped', (WidgetTester tester) async {
+    testWidgets('shows NewProjectDialog when FloatingActionButton is tapped',
+        (WidgetTester tester) async {
       when(mockProjectService.getProjects()).thenAnswer((_) async => []);
 
       await tester.pumpWidget(createTestableWidget(
@@ -96,7 +102,8 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(find.byType(FloatingActionButton));
-      await tester.pumpAndSettle(); // This pump is needed for the dialog to appear
+      await tester
+          .pumpAndSettle(); // This pump is needed for the dialog to appear
 
       expect(find.byType(NewProjectDialog), findsOneWidget);
     });

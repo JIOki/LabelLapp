@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
@@ -45,19 +46,30 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
         i: GlobalKey<_AnnotationPageState>()
     };
     _pageController.addListener(_onPageChanged);
+
+    // Force landscape orientation
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
   }
 
   @override
   void dispose() {
     _pageController.removeListener(_onPageChanged);
     _pageController.dispose();
+
+    // Restore default orientations
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
     super.dispose();
   }
 
   void _onPageChanged() {
     final newIndex = _pageController.page?.round();
     if (newIndex != null && newIndex != _currentIndex) {
-      // Auto-save previous page asynchronously.
       _savePage(_currentIndex, showFeedback: false).then((success) {
         if (!success && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -72,14 +84,30 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
     }
   }
 
+  void _goToPreviousPage() {
+    if (_isSaving || _pageController.page?.round() == 0) {
+      return;
+    }
+    _pageController.previousPage(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _goToNextPage() {
+    if (_isSaving || _pageController.page?.round() == _updatedImages.length - 1) {
+      return;
+    }
+    _pageController.nextPage(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
   Future<bool> _savePage(int pageIndex, {required bool showFeedback}) async {
     if (_isSaving) return false;
 
-    if (mounted) {
-      setState(() {
-        _isSaving = true;
-      });
-    }
+    if (mounted) setState(() => _isSaving = true);
 
     try {
       final pageState = _pageKeys[pageIndex]?.currentState;
@@ -89,9 +117,7 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
 
       if (mounted) {
         if (updatedImage != null) {
-          setState(() {
-            _updatedImages[pageIndex] = updatedImage;
-          });
+          setState(() => _updatedImages[pageIndex] = updatedImage);
           if (showFeedback) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -114,27 +140,16 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
       }
       return false;
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
   Future<void> _saveAndExit() async {
     if (_isSaving) return;
-
     final success = await _savePage(_currentIndex, showFeedback: true);
-
     if (mounted && success) {
       Navigator.of(context).pop(_updatedImages);
     }
-  }
-
-  Future<void> _saveAndContinue() async {
-    if (_isSaving) return;
-    await _savePage(_currentIndex, showFeedback: true);
   }
 
   @override
@@ -146,52 +161,140 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
         _saveAndExit();
       },
       child: Scaffold(
-        appBar: AppBar(
-          leading: BackButton(onPressed: _isSaving ? null : _saveAndExit),
-          title: Text(
-            _updatedImages.isNotEmpty
-                ? '${_updatedImages[_currentIndex].name} (${_currentIndex + 1}/${_updatedImages.length})'
-                : '',
-            overflow: TextOverflow.ellipsis,
+        body: SafeArea(
+          child: Row(
+            children: [
+              Expanded(
+                child: PageView.builder(
+                  controller: _pageController,
+                  itemCount: _updatedImages.length,
+                  itemBuilder: (context, index) {
+                    return AnnotationPage(
+                      key: _pageKeys[index],
+                      image: _updatedImages[index],
+                      project: widget.project,
+                      onStateUpdate: () => setState(() {}),
+                    );
+                  },
+                ),
+              ),
+              _buildControlPanel(),
+            ],
           ),
-          actions: [
-            Builder(builder: (context) {
-              final pageState = _pageKeys[_currentIndex]?.currentState;
-              return IconButton(
-                icon: const Icon(Icons.undo),
-                onPressed: pageState?.canUndo == true ? pageState?.undo : null,
-              );
-            }),
-            Builder(builder: (context) {
-              final pageState = _pageKeys[_currentIndex]?.currentState;
-              return IconButton(
-                icon: const Icon(Icons.redo),
-                onPressed: pageState?.canRedo == true ? pageState?.redo : null,
-              );
-            }),
-          ],
-        ),
-        body: PageView.builder(
-          controller: _pageController,
-          itemCount: _updatedImages.length,
-          itemBuilder: (context, index) {
-            return AnnotationPage(
-              key: _pageKeys[index],
-              image: _updatedImages[index],
-              project: widget.project,
-              onStateUpdate: () => setState(() {}),
-            );
-          },
-        ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: _isSaving ? null : _saveAndContinue,
-          tooltip: 'Save',
-          child: _isSaving
-              ? const CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white))
-              : const Icon(Icons.save),
         ),
       ),
+    );
+  }
+
+  Widget _buildControlPanel() {
+    final pageState = _pageKeys[_currentIndex]?.currentState;
+    final theme = Theme.of(context);
+
+    return Container(
+      width: 260,
+      color: theme.colorScheme.surface.withAlpha(30),
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: _isSaving ? null : _saveAndExit),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _updatedImages.isNotEmpty
+                      ? _updatedImages[_currentIndex].name
+                      : '',
+                  style: theme.textTheme.titleMedium,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                  icon: const Icon(Icons.save),
+                  onPressed: _isSaving
+                      ? null
+                      : () => _savePage(_currentIndex, showFeedback: true)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.arrow_back_ios),
+                onPressed: _currentIndex > 0 ? _goToPreviousPage : null,
+              ),
+              Text(
+                '${_currentIndex + 1} of ${_updatedImages.length}',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium,
+              ),
+              IconButton(
+                icon: const Icon(Icons.arrow_forward_ios),
+                onPressed: _currentIndex < _updatedImages.length - 1
+                    ? _goToNextPage
+                    : null,
+              ),
+            ],
+          ),
+          const Divider(height: 32),
+          Expanded(
+            child: ListView(
+              children: [
+                Text('Classes', style: theme.textTheme.titleSmall),
+                const SizedBox(height: 8),
+                if (pageState != null) _buildClassSelector(pageState),
+              ],
+            ),
+          ),
+          const Divider(height: 32),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.undo),
+                onPressed: (pageState != null && pageState.canUndo)
+                    ? pageState.undo
+                    : null,
+              ),
+              IconButton(
+                icon: const Icon(Icons.redo),
+                onPressed: (pageState != null && pageState.canRedo)
+                    ? pageState.redo
+                    : null,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (_isSaving) const Center(child: CircularProgressIndicator()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildClassSelector(_AnnotationPageState pageState) {
+    return Wrap(
+      spacing: 8.0,
+      runSpacing: 8.0,
+      children: widget.project.classes.map((className) {
+        final isSelected = pageState._selectedClass == className;
+        return ChoiceChip(
+          label: Text(className),
+          selected: isSelected,
+          onSelected: (selected) {
+            setState(() {
+              pageState.setSelectedClass(selected ? className : null);
+            });
+          },
+        );
+      }).toList(),
     );
   }
 }
@@ -229,7 +332,8 @@ class _AnnotationPageState extends State<AnnotationPage>
   @override
   void initState() {
     super.initState();
-    _boxes = widget.image.annotation.boxes.map((box) => box.copyWith()).toList();
+    _boxes =
+        widget.image.annotation.boxes.map((box) => box.copyWith()).toList();
     _history = [_boxes.map((b) => b.copyWith()).toList()];
     _redoStack = [];
     _loadImage();
@@ -237,13 +341,19 @@ class _AnnotationPageState extends State<AnnotationPage>
 
   Future<void> _loadImage() async {
     final completer = Completer<ui.Image>();
-    MemoryImage(widget.image.bytes).resolve(const ImageConfiguration()).addListener(
+    MemoryImage(widget.image.bytes)
+        .resolve(const ImageConfiguration())
+        .addListener(
       ImageStreamListener((info, _) {
         if (!completer.isCompleted) completer.complete(info.image);
       }),
     );
     final loadedImage = await completer.future;
     if (mounted) setState(() => _image = loadedImage);
+  }
+
+  void setSelectedClass(String? className) {
+    if (mounted) setState(() => _selectedClass = className);
   }
 
   void commitChange(List<BoundingBox> newBoxes) {
@@ -284,15 +394,18 @@ class _AnnotationPageState extends State<AnnotationPage>
 
     if (_image == null) return null;
 
-    final yoloStrings = _boxes.map((box) {
-      final classIndex = widget.project.classes.indexOf(box.label);
-      if (classIndex == -1) return null;
-      final centerX = (box.left + box.right) / 2 / _image!.width;
-      final centerY = (box.top + box.bottom) / 2 / _image!.height;
-      final width = (box.right - box.left) / _image!.width;
-      final height = (box.bottom - box.top) / _image!.height;
-      return '$classIndex $centerX $centerY $width $height';
-    }).whereType<String>().join('\n');
+    final yoloStrings = _boxes
+        .map((box) {
+          final classIndex = widget.project.classes.indexOf(box.label);
+          if (classIndex == -1) return null;
+          final centerX = (box.left + box.right) / 2 / _image!.width;
+          final centerY = (box.top + box.bottom) / 2 / _image!.height;
+          final width = (box.right - box.left) / _image!.width;
+          final height = (box.bottom - box.top) / _image!.height;
+          return '$classIndex $centerX $centerY $width $height';
+        })
+        .whereType<String>()
+        .join('\n');
 
     final success = await projectService.saveLabelForImage(
       projectPath: widget.project.projectPath,
@@ -301,8 +414,8 @@ class _AnnotationPageState extends State<AnnotationPage>
     );
 
     return success
-        ? widget.image
-            .copyWith(annotation: widget.image.annotation.copyWith(boxes: _boxes))
+        ? widget.image.copyWith(
+            annotation: widget.image.annotation.copyWith(boxes: _boxes))
         : null;
   }
 
@@ -318,61 +431,25 @@ class _AnnotationPageState extends State<AnnotationPage>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    return Column(
-      children: [
-        Expanded(
-          child: _image != null
-              ? Container(
-                  color: Colors.grey[800],
-                  child: FittedBox(
-                    fit: BoxFit.contain,
-                    child: SizedBox.fromSize(
-                      size: Size(
-                          _image!.width.toDouble(), _image!.height.toDouble()),
-                      child: DrawingCanvas(
-                        image: _image!,
-                        boxes: _boxes,
-                        selectedClass: _selectedClass,
-                        projectClasses: widget.project.classes,
-                        onUpdate: (updatedBoxes) =>
-                            setState(() => _boxes = updatedBoxes),
-                        onCommit: commitChange,
-                      ),
-                    ),
-                  ),
-                )
-              : const Center(child: CircularProgressIndicator()),
-        ),
-        _buildClassSelector(),
-      ],
-    );
-  }
-
-  Widget _buildClassSelector() {
-    return Container(
-      height: 80,
-      padding: const EdgeInsets.symmetric(vertical: 16.0),
-      color: Theme.of(context).bottomAppBarTheme.color,
-      child: Center(
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: widget.project.classes.map((className) {
-              final isSelected = _selectedClass == className;
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6.0),
-                child: ChoiceChip(
-                  label: Text(className),
-                  selected: isSelected,
-                  onSelected: (selected) => setState(
-                      () => _selectedClass = selected ? className : null),
+    return _image != null
+        ? Container(
+            color: Colors.grey[800],
+            child: FittedBox(
+              fit: BoxFit.contain,
+              child: SizedBox.fromSize(
+                size: Size(_image!.width.toDouble(), _image!.height.toDouble()),
+                child: DrawingCanvas(
+                  image: _image!,
+                  boxes: _boxes,
+                  selectedClass: _selectedClass,
+                  projectClasses: widget.project.classes,
+                  onUpdate: (updatedBoxes) =>
+                      setState(() => _boxes = updatedBoxes),
+                  onCommit: commitChange,
                 ),
-              );
-            }).toList(),
-          ),
-        ),
-      ),
-    );
+              ),
+            ),
+          )
+        : const Center(child: CircularProgressIndicator());
   }
 }

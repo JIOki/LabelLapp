@@ -65,7 +65,9 @@ class ImageThumbnailCard extends StatelessWidget {
                 child: Icon(
                   Icons.check_circle,
                   color: colorScheme.primary,
-                  shadows: [Shadow(color: Colors.black.withAlpha(128), blurRadius: 4)],
+                  shadows: [
+                    Shadow(color: Colors.black.withAlpha(128), blurRadius: 4)
+                  ],
                 ),
               ),
 
@@ -79,7 +81,9 @@ class ImageThumbnailCard extends StatelessWidget {
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
-                  shadows: [Shadow(color: Colors.black.withAlpha(204), blurRadius: 2)],
+                  shadows: [
+                    Shadow(color: Colors.black.withAlpha(204), blurRadius: 2)
+                  ],
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,

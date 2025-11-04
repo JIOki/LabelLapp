@@ -44,7 +44,8 @@ class _AutoCaptureControlState extends State<AutoCaptureControl> {
 
   void _startCaptureLoop() {
     _captureTimer?.cancel(); // Cancel any existing timer
-    _captureTimer = Timer.periodic(Duration(seconds: _captureInterval), (timer) {
+    _captureTimer =
+        Timer.periodic(Duration(seconds: _captureInterval), (timer) {
       if (_isAutoCapturing) {
         widget.onTakePictureRequest();
         _startCountdown();
@@ -108,12 +109,16 @@ class _AutoCaptureControlState extends State<AutoCaptureControl> {
           children: [
             IconButton(
               icon: Icon(
-                _isAutoCapturing ? Icons.pause_circle_filled : Icons.play_circle_filled,
+                _isAutoCapturing
+                    ? Icons.pause_circle_filled
+                    : Icons.play_circle_filled,
                 color: _isAutoCapturing ? Colors.redAccent : Colors.white,
                 size: 40,
               ),
               onPressed: _toggleAutoCapture,
-              tooltip: _isAutoCapturing ? 'Pause Auto-capture' : 'Start Auto-capture',
+              tooltip: _isAutoCapturing
+                  ? 'Pause Auto-capture'
+                  : 'Start Auto-capture',
             ),
             if (!_isAutoCapturing)
               TextButton(
@@ -131,7 +136,8 @@ class _AutoCaptureControlState extends State<AutoCaptureControl> {
                     ),
                     Text(
                       'Interval: ${_captureInterval}s',
-                       style: const TextStyle(color: Colors.white70, fontSize: 12),
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 12),
                     )
                   ],
                 ),

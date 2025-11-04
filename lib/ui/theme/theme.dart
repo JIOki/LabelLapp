@@ -8,7 +8,8 @@ class ThemeProvider with ChangeNotifier {
   ThemeMode get themeMode => _themeMode;
 
   void toggleTheme() {
-    _themeMode = _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
+    _themeMode =
+        _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
     notifyListeners();
   }
 }
@@ -21,12 +22,18 @@ class AppTheme {
   // Define a consistent TextTheme using Google Fonts
   static final TextTheme _textTheme = TextTheme(
     // For headlines and titles
-    displayLarge: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 57),
-    displayMedium: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 45),
-    displaySmall: GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 36),
-    headlineLarge: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 32),
-    headlineMedium: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 28),
-    headlineSmall: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 24),
+    displayLarge:
+        GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 57),
+    displayMedium:
+        GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 45),
+    displaySmall:
+        GoogleFonts.poppins(fontWeight: FontWeight.bold, fontSize: 36),
+    headlineLarge:
+        GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 32),
+    headlineMedium:
+        GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 28),
+    headlineSmall:
+        GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 24),
     titleLarge: GoogleFonts.poppins(fontWeight: FontWeight.w500, fontSize: 22),
     titleMedium: GoogleFonts.poppins(fontWeight: FontWeight.w500, fontSize: 16),
     titleSmall: GoogleFonts.poppins(fontWeight: FontWeight.w500, fontSize: 14),
@@ -56,7 +63,8 @@ class AppTheme {
         shadowColor: Colors.black26,
         backgroundColor: colorScheme.surface,
         foregroundColor: colorScheme.onSurface,
-        titleTextStyle: _textTheme.headlineSmall?.copyWith(color: colorScheme.onSurface),
+        titleTextStyle:
+            _textTheme.headlineSmall?.copyWith(color: colorScheme.onSurface),
       ),
       cardTheme: CardThemeData(
         elevation: 0,
@@ -92,7 +100,8 @@ class AppTheme {
         elevation: 2,
         backgroundColor: colorScheme.surface,
         foregroundColor: colorScheme.onSurface,
-        titleTextStyle: _textTheme.headlineSmall?.copyWith(color: colorScheme.onSurface),
+        titleTextStyle:
+            _textTheme.headlineSmall?.copyWith(color: colorScheme.onSurface),
       ),
       cardTheme: CardThemeData(
         elevation: 0,

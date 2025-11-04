@@ -57,54 +57,64 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
   void _onPageChanged() {
     final newIndex = _pageController.page?.round();
     if (newIndex != null && newIndex != _currentIndex) {
-      // Auto-save previous page, show error on failure.
-      _saveAnnotationsForPage(_currentIndex, showErrorSnackbar: true);
+      // Auto-save previous page asynchronously.
+      _savePage(_currentIndex, showFeedback: false).then((success) {
+        if (!success && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Auto-save failed for previous image.')),
+          );
+        }
+      });
       setState(() {
         _currentIndex = newIndex;
       });
     }
   }
 
-  Future<bool> _saveAnnotationsForPage(int pageIndex, {bool showErrorSnackbar = false}) async {
-    final pageState = _pageKeys[pageIndex]?.currentState;
-    if (pageState == null) return false;
-
-    final updatedImage = await pageState.saveAnnotations();
-    if (updatedImage != null) {
-      if (mounted) {
-        setState(() {
-          _updatedImages[pageIndex] = updatedImage;
-        });
-      }
-      return true; // Success
-    } else {
-      if (mounted && showErrorSnackbar) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving annotations for ${_updatedImages[pageIndex].name}')),
-        );
-      }
-      return false; // Failure
-    }
-  }
-
-  Future<void> _saveAndExit() async {
-    if (_isSaving) return;
-
-    setState(() {
-      _isSaving = true;
-    });
-
-    // Save and check for success. Do not show default error snackbar from here.
-    final success = await _saveAnnotationsForPage(_currentIndex, showErrorSnackbar: false);
+  Future<bool> _savePage(int pageIndex, {required bool showFeedback}) async {
+    if (_isSaving) return false;
 
     if (mounted) {
-      if (success) {
-        Navigator.of(context).pop(_updatedImages);
-      } else {
-        // On failure, show a specific error and reset the button.
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not save. Please try again.')),
-        );
+      setState(() {
+        _isSaving = true;
+      });
+    }
+
+    try {
+      final pageState = _pageKeys[pageIndex]?.currentState;
+      if (pageState == null) return false;
+
+      final updatedImage = await pageState.saveAnnotations();
+
+      if (mounted) {
+        if (updatedImage != null) {
+          setState(() {
+            _updatedImages[pageIndex] = updatedImage;
+          });
+          if (showFeedback) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Annotations saved successfully!'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+          return true;
+        } else {
+          if (showFeedback) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                  content: Text(
+                      'Error saving annotations for ${_updatedImages[pageIndex].name}')),
+            );
+          }
+          return false;
+        }
+      }
+      return false;
+    } finally {
+      if (mounted) {
         setState(() {
           _isSaving = false;
         });
@@ -112,10 +122,25 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
     }
   }
 
+  Future<void> _saveAndExit() async {
+    if (_isSaving) return;
+
+    final success = await _savePage(_currentIndex, showFeedback: true);
+
+    if (mounted && success) {
+      Navigator.of(context).pop(_updatedImages);
+    }
+  }
+
+  Future<void> _saveAndContinue() async {
+    if (_isSaving) return;
+    await _savePage(_currentIndex, showFeedback: true);
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      canPop: false,
+      canPop: !_isSaving,
       onPopInvokedWithResult: (bool didPop, Object? result) {
         if (didPop) return;
         _saveAndExit();
@@ -124,7 +149,9 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
         appBar: AppBar(
           leading: BackButton(onPressed: _isSaving ? null : _saveAndExit),
           title: Text(
-            _updatedImages.isNotEmpty ? '${_updatedImages[_currentIndex].name} (${_currentIndex + 1}/${_updatedImages.length})' : '',
+            _updatedImages.isNotEmpty
+                ? '${_updatedImages[_currentIndex].name} (${_currentIndex + 1}/${_updatedImages.length})'
+                : '',
             overflow: TextOverflow.ellipsis,
           ),
           actions: [
@@ -157,10 +184,11 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
           },
         ),
         floatingActionButton: FloatingActionButton(
-          onPressed: _isSaving ? null : _saveAndExit,
-          tooltip: 'Save & Exit',
+          onPressed: _isSaving ? null : _saveAndContinue,
+          tooltip: 'Save',
           child: _isSaving
-              ? const CircularProgressIndicator(valueColor: AlwaysStoppedAnimation<Color>(Colors.white))
+              ? const CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white))
               : const Icon(Icons.save),
         ),
       ),
@@ -184,7 +212,8 @@ class AnnotationPage extends StatefulWidget {
   State<AnnotationPage> createState() => _AnnotationPageState();
 }
 
-class _AnnotationPageState extends State<AnnotationPage> with AutomaticKeepAliveClientMixin {
+class _AnnotationPageState extends State<AnnotationPage>
+    with AutomaticKeepAliveClientMixin {
   late List<BoundingBox> _boxes;
   ui.Image? _image;
   String? _selectedClass;
@@ -271,7 +300,10 @@ class _AnnotationPageState extends State<AnnotationPage> with AutomaticKeepAlive
       yoloString: yoloStrings,
     );
 
-    return success ? widget.image.copyWith(annotation: widget.image.annotation.copyWith(boxes: _boxes)) : null;
+    return success
+        ? widget.image
+            .copyWith(annotation: widget.image.annotation.copyWith(boxes: _boxes))
+        : null;
   }
 
   Future<bool> _requestStoragePermission() async {
@@ -295,13 +327,15 @@ class _AnnotationPageState extends State<AnnotationPage> with AutomaticKeepAlive
                   child: FittedBox(
                     fit: BoxFit.contain,
                     child: SizedBox.fromSize(
-                      size: Size(_image!.width.toDouble(), _image!.height.toDouble()),
+                      size: Size(
+                          _image!.width.toDouble(), _image!.height.toDouble()),
                       child: DrawingCanvas(
                         image: _image!,
                         boxes: _boxes,
                         selectedClass: _selectedClass,
                         projectClasses: widget.project.classes,
-                        onUpdate: (updatedBoxes) => setState(() => _boxes = updatedBoxes),
+                        onUpdate: (updatedBoxes) =>
+                            setState(() => _boxes = updatedBoxes),
                         onCommit: commitChange,
                       ),
                     ),
@@ -331,7 +365,8 @@ class _AnnotationPageState extends State<AnnotationPage> with AutomaticKeepAlive
                 child: ChoiceChip(
                   label: Text(className),
                   selected: isSelected,
-                  onSelected: (selected) => setState(() => _selectedClass = selected ? className : null),
+                  onSelected: (selected) => setState(
+                      () => _selectedClass = selected ? className : null),
                 ),
               );
             }).toList(),

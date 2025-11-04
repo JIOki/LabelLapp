@@ -15,14 +15,13 @@ import '../../../data/models/image_model.dart';
 import '../../../data/models/project_model.dart';
 import '../../widgets/edit_project_dialog.dart';
 import '../annotation/annotation_screen.dart';
-import '../camera/camera_screen.dart'; // Import the new camera screen
+import '../camera/camera_screen.dart';
 import './widgets/image_thumbnail_card.dart';
 
 class ProjectScreen extends StatefulWidget {
   final Project project;
-  final VoidCallback? onPopped;
 
-  const ProjectScreen({super.key, required this.project, this.onPopped});
+  const ProjectScreen({super.key, required this.project});
 
   @override
   State<ProjectScreen> createState() => _ProjectScreenState();
@@ -40,12 +39,6 @@ class _ProjectScreenState extends State<ProjectScreen> {
     super.initState();
     _project = widget.project;
     _loadImagesFromProjectDir();
-  }
-
-  @override
-  void dispose() {
-    widget.onPopped?.call();
-    super.dispose();
   }
 
   Future<void> _loadImagesFromProjectDir() async {
@@ -142,15 +135,12 @@ class _ProjectScreenState extends State<ProjectScreen> {
               ListTile(
                 leading: const Icon(Icons.camera_alt_outlined),
                 title: const Text('Use Camera'),
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
+                onTap: () async {
+                   Navigator.pop(context);
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => CameraScreen(
-                        project: _project,
-                        onPopped: _loadImagesFromProjectDir,
-                      ),
+                      builder: (context) => CameraScreen(project: _project, onPopped: _loadImagesFromProjectDir),
                     ),
                   );
                 },
@@ -349,14 +339,20 @@ class _ProjectScreenState extends State<ProjectScreen> {
           imageBytes: image.bytes,
           isAnnotated: image.annotation.boxes.isNotEmpty,
           onTap: () async {
-            if(_isLoading || !mounted) return;
-            final updatedAnnotation = await Navigator.push<Annotation>(
+            if (_isLoading || !mounted) return;
+            final updatedImages = await Navigator.push<List<ProjectImage>>(
               context,
-              MaterialPageRoute(builder: (context) => AnnotationScreen(images: _images, project: _project, initialIndex: index)),
+              MaterialPageRoute(
+                  builder: (context) => AnnotationScreen(
+                        images: _images,
+                        project: _project,
+                        initialIndex: index,
+                      )),
             );
-            if (updatedAnnotation != null && mounted) {
+            if (updatedImages != null && mounted) {
               setState(() {
-                _images[index] = _images[index].copyWith(annotation: updatedAnnotation);
+                _images.clear();
+                _images.addAll(updatedImages);
               });
             }
           },

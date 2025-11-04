@@ -29,17 +29,20 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    final projectService = Provider.of<ProjectService>(context, listen: false);
-    _projectsFuture = projectService.getProjects();
+    _loadProjects();
   }
 
-  void _reloadProjects() {
+  void _loadProjects() {
     if (!mounted) return;
     final projectService = Provider.of<ProjectService>(context, listen: false);
     setState(() {
       _projectsFuture = projectService.getProjects();
-      _searchController.clear();
     });
+  }
+
+  void _reloadProjects() {
+    _loadProjects();
+    _searchController.clear();
   }
 
   Future<void> _requestStoragePermission() async {
@@ -77,7 +80,9 @@ class _HomeScreenState extends State<HomeScreen> {
           await Directory(p.join(projectPath, 'images')).create(recursive: true);
           await Directory(p.join(projectPath, 'labels')).create(recursive: true);
 
-          final updatedProjects = List<Project>.from(_projects)..add(newProject);
+          // Read the current projects, add the new one, and save back.
+          final currentProjects = await projectService.getProjects();
+          final updatedProjects = [...currentProjects, newProject];
           await projectService.saveProjects(updatedProjects);
 
           if (context.mounted) Navigator.pop(context, newProject);
@@ -88,15 +93,21 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!mounted) return;
 
     if (newProject != null) {
-      // No await, just navigate and pass the callback.
-      Navigator.of(context).push(
+      // Manually add to state to avoid full reload, then navigate.
+      setState(() {
+        _projects.add(newProject);
+        _searchProjects(_searchController.text); // Re-apply filter
+      });
+
+      await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (context) => ProjectScreen(
             project: newProject,
-            onPopped: _reloadProjects, // The callback will be called on dispose.
           ),
         ),
       );
+      // After returning from the new project, reload all projects to catch any updates.
+      _reloadProjects();
     }
   }
 
@@ -111,9 +122,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final updatedProjects = _projects.where((p) => p.id != id).toList();
     await projectService.saveProjects(updatedProjects);
-    
+
     if (!mounted) return;
-    _reloadProjects();
+    // Remove from state to instantly update UI
+    setState(() {
+      _projects.removeWhere((p) => p.id == id);
+      _searchProjects(_searchController.text);
+    });
   }
 
   void _searchProjects(String query) {
@@ -123,6 +138,16 @@ class _HomeScreenState extends State<HomeScreen> {
           .where((p) => p.name.toLowerCase().contains(query.toLowerCase()))
           .toList();
     });
+  }
+
+  Future<void> _navigateToProject(Project project) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ProjectScreen(project: project),
+      ),
+    );
+    // After returning from a project, reload all projects.
+    _reloadProjects();
   }
 
   @override
@@ -223,10 +248,11 @@ class _HomeScreenState extends State<HomeScreen> {
             return const Center(child: Text('No projects yet. Create one!'));
           }
 
-          _projects = snapshot.data!;
-          _filteredProjects = _searchController.text.isEmpty
-              ? _projects
-              : _projects.where((p) => p.name.toLowerCase().contains(_searchController.text.toLowerCase())).toList();
+          if (snapshot.connectionState == ConnectionState.done &&
+              _projects.isEmpty) {
+            _projects = snapshot.data ?? [];
+            _filteredProjects = _projects;
+          }
 
           return RefreshIndicator(
             onRefresh: () async => _reloadProjects(),
@@ -237,15 +263,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 final project = _filteredProjects[index];
                 return ProjectCard(
                   project: project,
-                  onTap: () {
-                    // No await, just navigate and pass the callback.
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                          builder: (context) => ProjectScreen(
-                              project: project, 
-                              onPopped: _reloadProjects)),
-                    );
-                  },
+                  onTap: () => _navigateToProject(project),
                   onDelete: () =>
                       _showDeleteConfirmationDialog(project.id, project.name),
                 );
@@ -286,7 +304,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     if (result == true) {
-      // The mounted check is handled inside _deleteProject
       await _deleteProject(projectId);
     }
   }

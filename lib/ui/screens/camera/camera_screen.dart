@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:io';
 
@@ -12,12 +11,12 @@ import '../../../data/models/project_model.dart';
 
 class CameraScreen extends StatefulWidget {
   final Project project;
-  final VoidCallback onPopped;
+  final VoidCallback? onPopped;
 
   const CameraScreen({
     super.key,
     required this.project,
-    required this.onPopped,
+    this.onPopped,
   });
 
   @override
@@ -54,14 +53,13 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     _controller?.dispose();
     _autoCaptureTimer?.cancel();
     WakelockPlus.disable();
-    widget.onPopped(); // Ensure the previous screen reloads
+    widget.onPopped?.call();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // Re-check permissions when returning from settings
       _requestPermissionsAndInitialize();
     } else if (state == AppLifecycleState.inactive) {
       if(_controller?.value.isInitialized ?? false) {
@@ -88,7 +86,6 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   }
 
   Future<void> _initializeCamera() async {
-    // Dispose existing controller if it exists
     if (_controller != null) {
       await _controller!.dispose();
     }
@@ -99,7 +96,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     _controller = CameraController(
       cameras.first,
       ResolutionPreset.high,
-      enableAudio: !_isPhotoMode, // Enable audio only for video mode
+      enableAudio: !_isPhotoMode, 
     );
 
     try {
@@ -113,12 +110,12 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         setState(() => _isCameraInitialized = true);
       }
     } catch (e) {
-      // Handle errors
+      debugPrint('Camera initialization error: $e');
     }
   }
 
   void _onTakePhotoPressed() async {
-    if (!_isCameraInitialized || _isRecording) return;
+    if (!_isCameraInitialized || _isRecording || _controller == null) return;
     try {
       final image = await _controller!.takePicture();
       final imagesDir = Directory(p.join(widget.project.projectPath, 'images'));
@@ -133,36 +130,38 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         );
       }
     } catch (e) {
-      // Handle error
+      debugPrint('Error taking photo: $e');
     }
   }
 
   void _onRecordButtonPressed() async {
-    if (!_isCameraInitialized) return;
+    if (!_isCameraInitialized || _controller == null) return;
     if (_isRecording) {
       try {
         final video = await _controller!.stopVideoRecording();
-        setState(() => _isRecording = false);
+        if (mounted) setState(() => _isRecording = false);
+
         final videosDir = Directory(p.join(widget.project.projectPath, 'videos'));
         await videosDir.create(recursive: true);
         final fileName = '${DateTime.now().millisecondsSinceEpoch}.mp4';
         final newPath = p.join(videosDir.path, fileName);
         await File(video.path).copy(newPath);
-        await File(video.path).delete();
+        await File(video.path).delete(); 
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Video saved: ${p.basename(newPath)}')),
           );
         }
       } catch (e) {
-        // Handle error
+        debugPrint('Error stopping video recording: $e');
       }
     } else {
       try {
         await _controller!.startVideoRecording();
-        setState(() => _isRecording = true);
+        if (mounted) setState(() => _isRecording = true);
       } catch (e) {
-        // Handle error
+        debugPrint('Error starting video recording: $e');
       }
     }
   }
@@ -174,7 +173,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     } else {
       if (_timerSeconds < 1) return;
       _autoCaptureTimer = Timer.periodic(Duration(seconds: _timerSeconds.toInt()), (timer) {
-        _onTakePhotoPressed();
+        if(!_isRecording) _onTakePhotoPressed();
       });
       if (mounted) setState(() => _isAutoCapturing = true);
     }
@@ -221,7 +220,10 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             ),
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: openAppSettings,
+              onPressed: () async {
+                await openAppSettings();
+                _requestPermissionsAndInitialize(); // Re-check after opening settings
+              },
               child: const Text('Open Settings'),
             ),
           ],
@@ -236,7 +238,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       bottom: 0, left: 0, right: 0,
       child: Container(
         padding: const EdgeInsets.all(16).copyWith(bottom: 32),
-        color: Colors.black.withAlpha(128), // Corrected line
+        color: Colors.black.withAlpha(128),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -250,6 +252,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                       child: Slider(
                         value: _currentZoomLevel, min: _minZoomLevel, max: _maxZoomLevel,
                         onChanged: (value) async {
+                          if (_controller == null) return;
                           setState(() => _currentZoomLevel = value);
                           await _controller!.setZoomLevel(value);
                         },
@@ -280,7 +283,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 TextButton(
-                  onPressed: () => setState(() => _isPhotoMode = true),
+                  onPressed: _isRecording ? null : () => setState(() => _isPhotoMode = true),
                   child: Text('Photo', style: TextStyle(color: _isPhotoMode ? theme.colorScheme.primary : Colors.white, fontWeight: _isPhotoMode ? FontWeight.bold : FontWeight.normal)),
                 ),
                 GestureDetector(
@@ -295,7 +298,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
                   ),
                 ),
                 TextButton(
-                  onPressed: () => setState(() => _isPhotoMode = false),
+                  onPressed: _isRecording ? null : () => setState(() => _isPhotoMode = false),
                   child: Text('Video', style: TextStyle(color: !_isPhotoMode ? theme.colorScheme.primary : Colors.white, fontWeight: !_isPhotoMode ? FontWeight.bold : FontWeight.normal)),
                 ),
               ],

@@ -6,14 +6,18 @@ class ImageThumbnailCard extends StatelessWidget {
   final String imageName;
   final Uint8List imageBytes;
   final bool isAnnotated;
+  final bool isSelected;
   final VoidCallback onTap;
+  final VoidCallback onLongPress;
 
   const ImageThumbnailCard({
     super.key,
     required this.imageName,
     required this.imageBytes,
     required this.isAnnotated,
+    required this.isSelected,
     required this.onTap,
+    required this.onLongPress,
   });
 
   @override
@@ -28,6 +32,7 @@ class ImageThumbnailCard extends StatelessWidget {
       shadowColor: colorScheme.shadow.withAlpha(26),
       child: InkWell(
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -57,8 +62,8 @@ class ImageThumbnailCard extends StatelessWidget {
               ),
             ),
 
-            // Annotated Checkmark
-            if (isAnnotated)
+            // Annotated Checkmark (only show if not selected)
+            if (isAnnotated && !isSelected)
               Positioned(
                 top: 8,
                 right: 8,
@@ -89,6 +94,22 @@ class ImageThumbnailCard extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+
+            // Selection Overlay
+            if (isSelected)
+              Positioned.fill(
+                child: Container(
+                  color: colorScheme.primary.withAlpha(128),
+                  child: Icon(
+                    Icons.check_circle_outline,
+                    color: Colors.white,
+                    size: 48,
+                    shadows: [
+                      Shadow(color: Colors.black.withAlpha(128), blurRadius: 4)
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       ),

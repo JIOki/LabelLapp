@@ -52,6 +52,14 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
+
+    // Fix: Force a rebuild after the first frame to ensure the UI reflects
+    // the initial state of the annotation page (e.g., selected class).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   @override
@@ -95,7 +103,8 @@ class _AnnotationScreenState extends State<AnnotationScreen> {
   }
 
   void _goToNextPage() {
-    if (_isSaving || _pageController.page?.round() == _updatedImages.length - 1) {
+    if (_isSaving ||
+        _pageController.page?.round() == _updatedImages.length - 1) {
       return;
     }
     _pageController.nextPage(
@@ -337,6 +346,11 @@ class _AnnotationPageState extends State<AnnotationPage>
     _history = [_boxes.map((b) => b.copyWith()).toList()];
     _redoStack = [];
     _loadImage();
+
+    // Fix: Automatically select the first class if available
+    if (widget.project.classes.isNotEmpty) {
+      _selectedClass = widget.project.classes.first;
+    }
   }
 
   Future<void> _loadImage() async {

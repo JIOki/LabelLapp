@@ -19,10 +19,19 @@ class ProjectCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    final IconData originIcon = project.origin == ProjectOrigin.imported
+        ? Icons.snippet_folder_outlined
+        : Icons.edit_note_outlined;
+
+    final String originTooltip = project.origin == ProjectOrigin.imported
+        ? 'Imported Project'
+        : 'Project Created in App';
+
     return Card(
       elevation: 4,
-      shadowColor: colorScheme.shadow.withAlpha(25), // Modern way to set shadow
+      shadowColor: colorScheme.shadow.withAlpha(25),
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
@@ -32,15 +41,31 @@ class ProjectCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Project Name
-              Text(
-                project.name,
-                style: theme.textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: colorScheme.onSurface,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              // Project Name with Origin Icon
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Tooltip(
+                    message: originTooltip,
+                    child: Icon(
+                      originIcon,
+                      color: colorScheme.secondary,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      project.name,
+                      style: theme.textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: colorScheme.onSurface,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               // Project Path
@@ -49,16 +74,14 @@ class ProjectCard extends StatelessWidget {
                   Icon(
                     Icons.folder_open_outlined,
                     size: 16,
-                    color: colorScheme
-                        .onSurfaceVariant, // Use a theme-based subtle color
+                    color: colorScheme.onSurfaceVariant,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       project.projectPath,
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color: colorScheme
-                            .onSurfaceVariant, // Consistent subtle color
+                        color: colorScheme.onSurfaceVariant,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),

@@ -13,6 +13,8 @@ import '../../../data/models/annotation_model.dart';
 import '../../../data/models/bounding_box_model.dart';
 import '../../../data/models/image_model.dart';
 import '../../../data/models/project_model.dart';
+import '../../../services/project_service.dart';
+import '../../widgets/confirmation_dialog.dart';
 import '../../widgets/edit_project_dialog.dart';
 import '../annotation/annotation_screen.dart';
 import '../camera/camera_screen.dart';
@@ -20,8 +22,10 @@ import './widgets/image_thumbnail_card.dart';
 
 class ProjectScreen extends StatefulWidget {
   final Project project;
+  final ProjectService projectService;
 
-  const ProjectScreen({super.key, required this.project});
+  const ProjectScreen(
+      {super.key, required this.project, required this.projectService});
 
   @override
   State<ProjectScreen> createState() => _ProjectScreenState();
@@ -33,6 +37,10 @@ class _ProjectScreenState extends State<ProjectScreen> {
   bool _isLoading = true;
   final ValueNotifier<int> _progressNotifier = ValueNotifier<int>(0);
   final ValueNotifier<int> _totalNotifier = ValueNotifier<int>(0);
+
+  // Selection mode state
+  bool _isSelectionMode = false;
+  final List<ProjectImage> _selectedImages = [];
 
   @override
   void initState() {
@@ -77,7 +85,9 @@ class _ProjectScreenState extends State<ProjectScreen> {
 
     if (await labelFile.exists()) {
       final content = await labelFile.readAsString();
-      if (content.trim().isEmpty) return Annotation(); // Empty file is not annotated
+      if (content.trim().isEmpty) {
+        return Annotation(); // Empty file is not annotated
+      }
 
       final lines = content.split('\n');
       final image = img.decodeImage(bytes);
@@ -119,6 +129,78 @@ class _ProjectScreenState extends State<ProjectScreen> {
       return Annotation(boxes: boxes);
     }
     return Annotation();
+  }
+
+  void _enterSelectionMode(ProjectImage image) {
+    if (_isSelectionMode) return;
+    setState(() {
+      _isSelectionMode = true;
+      _selectedImages.add(image);
+    });
+  }
+
+  void _exitSelectionMode() {
+    setState(() {
+      _isSelectionMode = false;
+      _selectedImages.clear();
+    });
+  }
+
+  void _toggleImageSelection(ProjectImage image) {
+    setState(() {
+      if (_selectedImages.contains(image)) {
+        _selectedImages.remove(image);
+        if (_selectedImages.isEmpty) {
+          _isSelectionMode = false;
+        }
+      } else {
+        _selectedImages.add(image);
+      }
+    });
+  }
+
+  Future<void> _deleteSelectedImages() async {
+    if (!mounted || _selectedImages.isEmpty) return;
+
+    final bool? confirmed = await showDialog(
+      context: context,
+      builder: (context) => ConfirmationDialog(
+        title: 'Delete Images',
+        content:
+            'Are you sure you want to delete ${_selectedImages.length} image(s)? This action cannot be undone.',
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      for (final image in _selectedImages) {
+        // Delete image file
+        final imageFile = File(p.join(_project.projectPath, 'images', image.name));
+        if (await imageFile.exists()) {
+          await imageFile.delete();
+        }
+
+        // Delete label file
+        final labelFile = File(p.join(_project.projectPath, 'labels',
+            '${p.basenameWithoutExtension(image.name)}.txt'));
+        if (await labelFile.exists()) {
+          await labelFile.delete();
+        }
+
+        // Remove from the main list
+        _images.removeWhere((img) => img.name == image.name);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _exitSelectionMode();
+        });
+      }
+    }
   }
 
   Future<void> _showAddImageSourceDialog() async {
@@ -168,9 +250,19 @@ class _ProjectScreenState extends State<ProjectScreen> {
   }
 
   Future<void> _pickImageFiles() async {
-    final result = await FilePicker.platform
-        .pickFiles(allowMultiple: true, type: FileType.image, withData: true);
-    if (result != null) await _processPlatformFiles(result.files);
+    final result = await FilePicker.platform.pickFiles(
+      allowMultiple: true,
+      type: FileType.any, // Allow any file type to open file explorer
+      withData: true,
+    );
+
+    if (result != null) {
+      final imageFiles = result.files.where((f) {
+        final ext = p.extension(f.name).toLowerCase();
+        return ['.jpg', '.jpeg', '.png', '.gif', '.bmp'].contains(ext);
+      }).toList();
+      await _processPlatformFiles(imageFiles);
+    }
   }
 
   Future<void> _pickImageFolder() async {
@@ -208,9 +300,16 @@ class _ProjectScreenState extends State<ProjectScreen> {
     _showProgressDialog('Processing Images');
 
     final newImages = <ProjectImage>[];
+    final existingImageNames = _images.map((img) => img.name).toSet();
+
     for (var i = 0; i < imagesData.length; i++) {
+      final data = imagesData[i];
+      if (existingImageNames.contains(data['name'])) {
+        _progressNotifier.value = i + 1;
+        continue; // Skip existing images
+      }
+
       try {
-        final data = imagesData[i];
         final image = img.decodeImage(data['bytes']);
         if (image != null) {
           final resized = img.copyResize(image, width: 640);
@@ -221,9 +320,10 @@ class _ProjectScreenState extends State<ProjectScreen> {
               annotation: Annotation());
           newImages.add(newImage);
           await _saveImage(newImage);
+          existingImageNames.add(newImage.name);
         }
       } catch (e) {
-        if (kDebugMode) print("Error processing ${imagesData[i]['name']}: $e");
+        if (kDebugMode) print("Error processing ${data['name']}: $e");
       }
       _progressNotifier.value = i + 1;
     }
@@ -242,11 +342,23 @@ class _ProjectScreenState extends State<ProjectScreen> {
   Future<void> _openEditClassesDialog() async {
     if (!mounted) return;
     final updatedClasses = await showDialog<List<String>>(
-        context: context,
-        builder: (context) =>
-            EditProjectDialog(initialClasses: _project.classes));
+      context: context,
+      builder: (context) =>
+          EditProjectDialog(initialClasses: _project.classes),
+    );
     if (updatedClasses != null && mounted) {
-      setState(() => _project = _project.copyWith(classes: updatedClasses));
+      final updatedProject = _project.copyWith(classes: updatedClasses);
+
+      // First, update all projects in the main list
+      final allProjects = await widget.projectService.getProjects();
+      final projectIndex = allProjects.indexWhere((p) => p.id == updatedProject.id);
+      if (projectIndex != -1) {
+        allProjects[projectIndex] = updatedProject;
+        await widget.projectService.saveProjects(allProjects);
+      }
+
+      // Then, update the local state
+      setState(() => _project = updatedProject);
     }
   }
 
@@ -283,7 +395,7 @@ class _ProjectScreenState extends State<ProjectScreen> {
       encoder.close();
 
       if (mounted) Navigator.of(context, rootNavigator: true).pop();
-      // ignore: deprecated_member_use
+
       await Share.shareXFiles([XFile(archivePath)],
           text: 'LabelLab Project: ${_project.name}');
     } catch (e) {
@@ -297,42 +409,78 @@ class _ProjectScreenState extends State<ProjectScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(
-        children: [
-          Positioned.fill(
-            child: Opacity(
-                opacity: 0.05,
-                child: Image.asset('assets/images/noise.png',
-                    repeat: ImageRepeat.repeat, fit: BoxFit.cover)),
-          ),
-          SafeArea(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildAppBar(Theme.of(context)),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Text('Project Images',
-                      style: Theme.of(context).textTheme.titleLarge),
-                ),
-                const SizedBox(height: 16),
-                Expanded(child: _buildImageGrid()),
-              ],
+    return PopScope(
+      canPop: !_isSelectionMode,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_isSelectionMode) {
+          _exitSelectionMode();
+        }
+      },
+      child: Scaffold(
+        body: Stack(
+          children: [
+            Positioned.fill(
+              child: Opacity(
+                  opacity: 0.05,
+                  child: Image.asset('assets/images/noise.png',
+                      repeat: ImageRepeat.repeat, fit: BoxFit.cover)),
             ),
-          ),
-          if (_isLoading) _buildLoadingIndicator(),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showAddImageSourceDialog,
-        label: const Text('Add Images'),
-        icon: const Icon(Icons.add_photo_alternate_outlined),
+            SafeArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildAppBar(Theme.of(context)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Text('Project Images',
+                        style: Theme.of(context).textTheme.titleLarge),
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(child: _buildImageGrid()),
+                ],
+              ),
+            ),
+            if (_isLoading) _buildLoadingIndicator(),
+          ],
+        ),
+        floatingActionButton: _isSelectionMode
+            ? null
+            : FloatingActionButton.extended(
+                onPressed: _showAddImageSourceDialog,
+                label: const Text('Add Images'),
+                icon: const Icon(Icons.add_photo_alternate_outlined),
+              ),
       ),
     );
   }
 
   Widget _buildAppBar(ThemeData theme) {
+    if (_isSelectionMode) {
+      return Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: _exitSelectionMode),
+            Expanded(
+              child: Text('${_selectedImages.length} selected',
+                  style: theme.textTheme.headlineSmall,
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              onPressed: _deleteSelectedImages,
+              tooltip: 'Delete selected images',
+            ),
+          ],
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.all(8.0),
       child: Row(
@@ -387,41 +535,42 @@ class _ProjectScreenState extends State<ProjectScreen> {
       itemCount: _images.length,
       itemBuilder: (context, index) {
         final image = _images[index];
+        final isSelected = _selectedImages.contains(image);
         return ImageThumbnailCard(
           imageName: image.name,
           imageBytes: image.bytes,
           isAnnotated: image.annotation.boxes.isNotEmpty,
-          onTap: () async {
-            if (_isLoading || !mounted) return;
-
-            // Create a mutable copy to pass to the annotation screen
-            final imagesCopy = List<ProjectImage>.from(_images);
-
-            final List<ProjectImage>? updatedImages = await Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (context) => AnnotationScreen(
-                        images: imagesCopy,
-                        project: _project,
-                        initialIndex: index,
-                      )),
-            );
-            if (updatedImages != null && mounted) {
-              setState(() {
-                // This is a more robust way to update the list, 
-                // preserving the original order if the returned list is different.
-                for (var updatedImage in updatedImages) {
-                  final originalIndex = _images.indexWhere((img) => img.name == updatedImage.name);
-                  if (originalIndex != -1) {
-                    _images[originalIndex] = updatedImage;
-                  }
-                }
-              });
+          isSelected: isSelected,
+          onTap: () {
+            if (_isSelectionMode) {
+              _toggleImageSelection(image);
+            } else {
+              _navigateToAnnotationScreen(index);
             }
           },
+          onLongPress: () => _enterSelectionMode(image),
         );
       },
     );
+  }
+
+  void _navigateToAnnotationScreen(int index) async {
+    if (_isLoading || !mounted) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+          builder: (context) => AnnotationScreen(
+                images: List<ProjectImage>.from(_images),
+                project: _project,
+                initialIndex: index,
+              )),
+    );
+
+    // Fix: Always reload images from disk to reflect the latest saved state.
+    if (mounted) {
+      _loadImagesFromProjectDir();
+    }
   }
 
   Widget _buildLoadingIndicator() {

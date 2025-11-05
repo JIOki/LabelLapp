@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:permission_handler/permission_handler.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -34,6 +35,7 @@ class _CameraScreenState extends State<CameraScreen>
   Timer? _autoCaptureTimer;
 
   bool _isPhotoMode = true;
+  FlashMode _currentFlashMode = FlashMode.off;
 
   double _currentZoomLevel = 1.0;
   double _minZoomLevel = 1.0;
@@ -45,6 +47,11 @@ class _CameraScreenState extends State<CameraScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     WakelockPlus.enable();
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
     _requestPermissionsAndInitialize();
   }
 
@@ -55,6 +62,9 @@ class _CameraScreenState extends State<CameraScreen>
     _autoCaptureTimer?.cancel();
     WakelockPlus.disable();
     widget.onPopped?.call();
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
     super.dispose();
   }
 
@@ -104,18 +114,23 @@ class _CameraScreenState extends State<CameraScreen>
       await _controller!.initialize();
       await _controller!.setFocusMode(FocusMode.auto);
       await _controller!.setExposureMode(ExposureMode.auto);
+      await _controller!.setFlashMode(FlashMode.off); // Set initial flash mode
+
       _minZoomLevel = await _controller!.getMinZoomLevel();
       _maxZoomLevel = await _controller!.getMaxZoomLevel();
 
       if (mounted) {
-        setState(() => _isCameraInitialized = true);
+        setState(() {
+          _isCameraInitialized = true;
+          _currentFlashMode = FlashMode.off;
+        });
       }
     } catch (e) {
       debugPrint('Camera initialization error: $e');
     }
   }
 
-  void _onTakePhotoPressed() async {
+  void _onTakePhotoPressed({bool showNotification = true}) async {
     if (!_isCameraInitialized || _isRecording || _controller == null) return;
     try {
       final image = await _controller!.takePicture();
@@ -125,7 +140,7 @@ class _CameraScreenState extends State<CameraScreen>
       final newPath = p.join(imagesDir.path, fileName);
       await image.saveTo(newPath);
 
-      if (mounted) {
+      if (mounted && showNotification) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Image saved: ${p.basename(newPath)}')),
         );
@@ -171,14 +186,51 @@ class _CameraScreenState extends State<CameraScreen>
   void _toggleAutoCapture() {
     if (_isAutoCapturing) {
       _autoCaptureTimer?.cancel();
-      if (mounted) setState(() => _isAutoCapturing = false);
+      if (mounted) {
+        setState(() => _isAutoCapturing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Captura automática detenida')),
+        );
+      }
     } else {
       if (_timerSeconds < 1) return;
+      if (mounted) {
+        setState(() => _isAutoCapturing = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Captura automática iniciada')),
+        );
+      }
       _autoCaptureTimer =
           Timer.periodic(Duration(seconds: _timerSeconds.toInt()), (timer) {
-        if (!_isRecording) _onTakePhotoPressed();
+        if (!_isRecording) _onTakePhotoPressed(showNotification: false);
       });
-      if (mounted) setState(() => _isAutoCapturing = true);
+    }
+  }
+
+  void _toggleFlashMode() async {
+    if (_controller == null || !_controller!.value.isInitialized) return;
+    final List<FlashMode> modes = [FlashMode.off, FlashMode.auto, FlashMode.always];
+    final currentModeIndex = modes.indexOf(_currentFlashMode);
+    final nextMode = modes[(currentModeIndex + 1) % modes.length];
+
+    try {
+      await _controller!.setFlashMode(nextMode);
+      setState(() => _currentFlashMode = nextMode);
+    } catch (e) {
+      debugPrint('Error setting flash mode: $e');
+    }
+  }
+
+  IconData _getFlashIcon(FlashMode mode) {
+    switch (mode) {
+      case FlashMode.off:
+        return Icons.flash_off;
+      case FlashMode.auto:
+        return Icons.flash_auto;
+      case FlashMode.always:
+        return Icons.flash_on;
+      case FlashMode.torch:
+        return Icons.highlight;
     }
   }
 
@@ -193,6 +245,12 @@ class _CameraScreenState extends State<CameraScreen>
           icon: const Icon(Icons.close, color: Colors.white),
           onPressed: () => Navigator.of(context).pop(),
         ),
+        actions: [
+          IconButton(
+            icon: Icon(_getFlashIcon(_currentFlashMode), color: Colors.white),
+            onPressed: _toggleFlashMode,
+          ),
+        ],
       ),
       body: _buildBody(),
     );

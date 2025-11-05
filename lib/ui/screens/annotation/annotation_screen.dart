@@ -434,20 +434,15 @@ class _AnnotationPageState extends State<AnnotationPage>
     return _image != null
         ? Container(
             color: Colors.grey[800],
-            child: FittedBox(
-              fit: BoxFit.contain,
-              child: SizedBox.fromSize(
-                size: Size(_image!.width.toDouble(), _image!.height.toDouble()),
-                child: DrawingCanvas(
-                  image: _image!,
-                  boxes: _boxes,
-                  selectedClass: _selectedClass,
-                  projectClasses: widget.project.classes,
-                  onUpdate: (updatedBoxes) =>
-                      setState(() => _boxes = updatedBoxes),
-                  onCommit: commitChange,
-                ),
-              ),
+            alignment: Alignment.center,
+            child: DrawingCanvas(
+              image: _image!,
+              boxes: _boxes,
+              selectedClass: _selectedClass,
+              projectClasses: widget.project.classes,
+              onUpdate: (updatedBoxes) =>
+                  setState(() => _boxes = updatedBoxes),
+              onCommit: commitChange,
             ),
           )
         : const Center(child: CircularProgressIndicator());

@@ -76,7 +76,10 @@ class _ProjectScreenState extends State<ProjectScreen> {
     final labelFile = File(labelPath);
 
     if (await labelFile.exists()) {
-      final lines = await labelFile.readAsLines();
+      final content = await labelFile.readAsString();
+      if (content.trim().isEmpty) return Annotation(); // Empty file is not annotated
+
+      final lines = content.split('\n');
       final image = img.decodeImage(bytes);
       if (image == null) return Annotation();
 
@@ -390,19 +393,29 @@ class _ProjectScreenState extends State<ProjectScreen> {
           isAnnotated: image.annotation.boxes.isNotEmpty,
           onTap: () async {
             if (_isLoading || !mounted) return;
-            final updatedImages = await Navigator.push<List<ProjectImage>>(
+
+            // Create a mutable copy to pass to the annotation screen
+            final imagesCopy = List<ProjectImage>.from(_images);
+
+            final List<ProjectImage>? updatedImages = await Navigator.push(
               context,
               MaterialPageRoute(
                   builder: (context) => AnnotationScreen(
-                        images: _images,
+                        images: imagesCopy,
                         project: _project,
                         initialIndex: index,
                       )),
             );
             if (updatedImages != null && mounted) {
               setState(() {
-                _images.clear();
-                _images.addAll(updatedImages);
+                // This is a more robust way to update the list, 
+                // preserving the original order if the returned list is different.
+                for (var updatedImage in updatedImages) {
+                  final originalIndex = _images.indexWhere((img) => img.name == updatedImage.name);
+                  if (originalIndex != -1) {
+                    _images[originalIndex] = updatedImage;
+                  }
+                }
               });
             }
           },
